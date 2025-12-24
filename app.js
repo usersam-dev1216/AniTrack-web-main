@@ -175,6 +175,7 @@ const sbInfoValue   = $('#sbInfoValue');
 const sbInfoLabel   = $('#sbInfoLabel');
 
 // Sidebar actions (main menu)
+const homeFab = $('#homeFab');
 const profileFab  = $('#profileFab');
 const accountFab  = $('#accountFab');
 const settingsFab = $('#settingsFab');
@@ -4996,8 +4997,11 @@ function setupEventListeners() {
   // Sidebar
   sidebarToggle?.addEventListener('click', openSidebar);
   closeSidebar?.addEventListener('click', closeSidebarFn);
-  [profileFab, accountFab, settingsFab].filter(Boolean)
-    .forEach(btn => btn.addEventListener('click', closeSidebarFn));
+  [homeFab, profileFab, accountFab, settingsFab].filter(Boolean)
+  .forEach(btn => btn.addEventListener('click', closeSidebarFn));
+
+  homeFab?.addEventListener('click', () => { location.hash = '#home'; });
+
 
   profileFab?.addEventListener('click', () => { location.hash = '#profile'; });
   accountFab?.addEventListener('click', () => { location.hash = '#account'; });
