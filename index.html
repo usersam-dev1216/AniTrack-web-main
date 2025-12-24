@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='8' fill='%238b5cf6'/%3E%3Cpolygon points='6,4 12,8 6,12' fill='white'/%3E%3C/svg%3E">
+
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#0f0f14" />
+    <title>Anime Watchlist Tracker</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+    <header>
+  <div class="list-header-shell">
+
+    <!-- LEFT: menu + logo -->
+    <div class="header-left">
+      <button id="sidebarToggle" class="hamburger" aria-label="Open menu" type="button">
+        <i class="fas fa-bars"></i>
+      </button>
+
+      <div class="logo">
+        <i class="fas fa-play-circle"></i>
+        <span>AniTrack</span>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="header-center">
+      <!-- Home-only top nav -->
+      <div class="header-center-nav" aria-label="Primary navigation">
+        <button class="topnav-link" id="navHomeBtn" type="button">Home</button>
+        <button class="topnav-link" id="navListBtn" type="button">My List</button>
+        <button class="topnav-link" id="navBrowseBtn" type="button">Browse</button>
+      </div>
+
+           <!-- List search moved above the grid -->
+    </div>
+
+
+
+  </div>
+</header>
+
+
+
+<!-- HOME VIEW -->
+<main id="homeView" class="view home-view">
+
+    <!-- Spotlight (full-width) -->
+    <section class="spotlight-wrap" aria-label="Spotlight">
+        <div class="spotlight" id="homeSpotlight" role="region" aria-live="polite">
+    <div class="spotlight-inner">
+        <h1 class="spotlight-title" id="spotlightTitle">—</h1>
+        <div class="spotlight-meta" id="spotlightMeta">—</div>
+        <p class="spotlight-desc" id="spotlightDesc">—</p>
+        <button class="btn spotlight-detail" id="spotlightDetailBtn" type="button">
+            Show Details <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
+
+    <!-- ONLY used when cover-fallback blur is active -->
+    <div class="spotlight-cover-overlay" id="spotlightCoverOverlay" hidden aria-hidden="true">
+        <img id="spotlightCoverImg" alt="" />
+    </div>
+
+    <div class="spotlight-nav" aria-label="Spotlight navigation">
+        <button class="spotlight-nav-btn" id="spotlightNextBtn" type="button" title="Next" aria-label="Next">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+        <button class="spotlight-nav-btn" id="spotlightPrevBtn" type="button" title="Previous" aria-label="Previous">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+    </div>
+</div>
+
+    </section>
+
+    <section class="home-section">
+        <div class="home-section-head">
+            <h2 class="home-section-title">Top Airing</h2>
+            <div class="home-section-line"></div>
+        </div>
+        <div class="home-row" id="homeTopAiringRow"></div>
+    </section>
+
+
+    <section class="home-section">
+        <div class="home-section-head">
+            <h2 class="home-section-title">My Favorites</h2>
+            <div class="home-section-line"></div>
+        </div>
+        <div class="home-row" id="homeFavoritesRow"></div>
+    </section>
+
+    <section class="home-section">
+        <div class="home-section-head">
+            <h2 class="home-section-title">Upcoming</h2>
+
+            <div class="home-section-line"></div>
+        </div>
+        <div class="home-row" id="homeRecentRow"></div>
+    </section>
+</main>
+
+
+        <!-- LIST VIEW (your current opening page) -->
+    <main id="listView" class="view" hidden>
+        <!-- List tools bar (search + filter) -->
+        <div class="list-grid-topbar" aria-label="Search and filter">
+          <div class="list-header-center-group">
+            <div class="search-box group">
+              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+              <input type="text" id="searchInput" class="input" placeholder="Search anime...">
+              <button id="clearSearch" class="clear-search-btn" style="display:none;">Clear All</button>
+            </div>
+
+            <button id="filterHeaderBtn"
+              class="status-chip list-pill-btn list-icon-pill"
+              type="button"
+              title="Filter"
+              aria-label="Filter">
+              <i class="fas fa-filter"></i>
+            </button>
+          </div>
+        </div>
+
+
+                <!-- LIST SIDEBAR (LIST PAGE ONLY) -->
+        <aside id="listSidebar" class="list-sidebar" aria-label="List sidebar">
+          <div class="ls-group ls-tools" aria-label="Tools">
+            <button id="lsAddBtn" class="ls-btn ls-tool" type="button" title="Add anime" aria-label="Add anime">
+              <i class="fas fa-plus"></i>
+            </button>
+
+      <button id="lsBulkBtn" class="ls-btn ls-tool" type="button" title="Bulk edit" aria-label="Bulk edit">
+  <i class="fas fa-pencil"></i>
+</button>
+
+
+            <button id="lsViewBtn" class="ls-btn ls-tool" type="button" title="Switch view" aria-label="Switch view">
+              <i class="fas fa-th-large"></i>
+            </button>
+          </div>
+
+          <div class="ls-sep" aria-hidden="true"></div>
+
+          <div class="ls-group ls-status" aria-label="Status filters">
+<button class="ls-btn active" data-status="All" type="button" title="All" aria-label="All">
+  <span aria-hidden="true">A</span>
+</button>
+
+            <button class="ls-btn" data-status="Watching" type="button" title="Watching" aria-label="Watching">
+              <i class="fas fa-play"></i>
+            </button>
+            <button class="ls-btn" data-status="Completed" type="button" title="Completed" aria-label="Completed">
+              <i class="fas fa-check"></i>
+            </button>
+            <button class="ls-btn" data-status="On Hold" type="button" title="On Hold" aria-label="On Hold">
+              <i class="fas fa-pause"></i>
+            </button>
+            <button class="ls-btn" data-status="Plan to Watch" type="button" title="Plan to Watch" aria-label="Plan to Watch">
+              <i class="fas fa-clock"></i>
+            </button>
+            <button class="ls-btn" data-status="Dropped" type="button" title="Dropped" aria-label="Dropped">
+              <i class="fas fa-ban"></i>
+            </button>
+          </div>
+
+          <div class="ls-sep" aria-hidden="true"></div>
+
+          <div class="ls-group ls-bottom" aria-label="More">
+            <button id="lsStatsBtn" class="ls-btn ls-tool" type="button" title="Statistics" aria-label="Statistics">
+              <i class="fas fa-chart-bar"></i>
+            </button>
+            <button id="lsSettingsBtn" class="ls-btn ls-tool" type="button" title="Settings" aria-label="Settings">
+              <i class="fas fa-cog"></i>
+            </button>
+          </div>
+        </aside>
+
+
+        <div id="animeGrid" class="anime-grid">
+            <div class="empty-state">
+                <i class="fas fa-film"></i>
+                <h2>Your Anime Watchlist is Empty</h2>
+                <p>Start building your collection by clicking the "Add Anime" button to add your favorite shows.</p>
+                <button id="addFirstAnimeBtn" class="btn">
+                    <i class="fas fa-plus"></i> Add Your First Anime
+                </button>
+            </div>
+        </div>
+    </main>
+
+
+
+    <!-- BROWSE VIEW (MAL live search) -->
+    <main id="browseView" class="view" hidden>
+
+        <!-- Browse tools bar (search only) -->
+        <div class="browse-grid-topbar" aria-label="Browse search">
+          <div class="search-box group">
+            <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+            <input type="text" id="browseSearchInput" class="input" placeholder="Search MyAnimeList...">
+            <button id="browseClearSearch" class="clear-search-btn" style="display:none;">Clear All</button>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div id="browseResultsShell" class="browse-results-shell">
+          <div class="empty-state">
+            <i class="fas fa-search"></i>
+            <h2>Search MyAnimeList</h2>
+            <p>Type a title to start browsing.</p>
+          </div>
+        </div>
+
+    </main>
+
+
+    <!-- USER SIGNUP VIEW -->
+    <main id="usersignup" class="view auth-view" hidden>
+      <div class="auth-wrap">
+<form class="auth-card" autocomplete="off">
+
+  <div class="auth-section-head">
+    <h2 class="auth-section-title">Login</h2>
+    <div class="auth-section-line"></div>
+  </div>
+
+  <div class="auth-fields">
+
+            <label class="auth-label" for="suEmail">Your Email</label>
+            <input id="suEmail" class="auth-input" type="email" inputmode="email" placeholder="something@example.com">
+
+            <label class="auth-label" for="suUsername">Create username (optional)</label>
+            <input id="suUsername" class="auth-input" type="text" placeholder="Create your own unique username">
+
+            <label class="auth-label" for="suPassword">Create Password</label>
+            <input id="suPassword" class="auth-input" type="password" placeholder="Create a strong password">
+
+      <label class="auth-label" for="suPassword2">Confirm Password</label>
+<input id="suPassword2" class="auth-input" type="password" placeholder="Confirm your password">
+
+
+<div class="auth-malgroup">
+  <input type="checkbox" id="suConnectMal" class="auth-malcheck">
+
+  <label class="auth-malcheck-label" for="suConnectMal">
+    <span class="auth-radio-dot" aria-hidden="true"></span>
+    <span>Connect your MAL (optional)</span>
+  </label>
+
+  <div class="auth-malfields">
+    <input id="suMalUsername" class="auth-input" type="text" placeholder="Add your MyAnimeList Username">
+  </div>
+</div>
+
+
+
+          <div class="auth-bottom">
+            <div class="auth-alt">
+              <div class="auth-alt-title">Already have an account?</div>
+              <a class="auth-alt-link" href="#userlogin">Click here to Login</a>
+            </div>
+
+            <button class="auth-primary" type="button">Sign Up</button>
+          </div>
+        </form>
+      </div>
+    </main>
+
+
+    <!-- USER LOGIN VIEW -->
+    <main id="userlogin" class="view auth-view" hidden>
+      <div class="auth-wrap">
+<form class="auth-card" autocomplete="off">
+
+  <div class="auth-section-head">
+    <h2 class="auth-section-title">Sign Up</h2>
+    <div class="auth-section-line"></div>
+  </div>
+
+  <div class="auth-fields">
+
+            <label class="auth-label" for="liEmail">Email</label>
+            <input id="liEmail" class="auth-input" type="email" inputmode="email" placeholder="something@example.com">
+
+            <label class="auth-label" for="liPassword">Password</label>
+            <input id="liPassword" class="auth-input" type="password" placeholder="Enter your password">
+          </div>
+
+          <div class="auth-bottom">
+            <div class="auth-alt">
+              <div class="auth-alt-title">Don’t have an account?</div>
+              <a class="auth-alt-link" href="#usersignup">Create one here</a>
+            </div>
+
+            <button class="auth-primary" type="button">Login</button>
+          </div>
+        </form>
+      </div>
+    </main>
+
+
+    <!-- ACCOUNT VIEW -->
+    <main id="accountView" class="view account-view" hidden>
+      <div class="account-wrap">
+        <div class="account-card">
+
+          <div class="account-section-head">
+            <h2 class="account-section-title">Account</h2>
+            <div class="account-section-line"></div>
+          </div>
+
+          <!-- IDENTITY -->
+          <section class="account-panel" aria-label="Identity">
+            <div class="account-panel-head">
+              <h3 class="account-panel-title">Identity</h3>
+              <div class="account-panel-line"></div>
+            </div>
+
+            <div class="account-grid">
+              <div class="account-field">
+                <label class="account-label" for="accUsername">Username</label>
+                <input id="accUsername" class="account-input" type="text" placeholder="Your username">
+              </div>
+
+              <div class="account-field">
+                <label class="account-label" for="accEmail">Email</label>
+                <input id="accEmail" class="account-input" type="email" inputmode="email" placeholder="something@example.com">
+              </div>
+            </div>
+
+            <div class="account-actions">
+              <button class="account-btn primary" type="button">
+                Save changes
+              </button>
+            </div>
+          </section>
+
+          <!-- SECURITY -->
+          <section class="account-panel" aria-label="Security">
+            <div class="account-panel-head">
+              <h3 class="account-panel-title">Security</h3>
+              <div class="account-panel-line"></div>
+            </div>
+
+            <div class="account-grid">
+              <div class="account-field">
+                <label class="account-label" for="accCurrentPassword">Current password</label>
+                <input id="accCurrentPassword" class="account-input" type="password" placeholder="Enter current password">
+              </div>
+
+              <div class="account-field">
+                <label class="account-label" for="accNewPassword">New password</label>
+                <input id="accNewPassword" class="account-input" type="password" placeholder="Create a new password">
+              </div>
+
+              <div class="account-field">
+                <label class="account-label" for="accNewPassword2">Confirm new password</label>
+                <input id="accNewPassword2" class="account-input" type="password" placeholder="Confirm new password">
+              </div>
+            </div>
+
+            <div class="account-actions">
+              <button class="account-btn" type="button">
+                Update password
+              </button>
+              <button class="account-btn ghost" type="button">
+                Forgot password?
+              </button>
+            </div>
+          </section>
+
+          <!-- MYANIMELIST -->
+          <section class="account-panel" aria-label="MyAnimeList">
+            <div class="account-panel-head">
+              <h3 class="account-panel-title">MyAnimeList</h3>
+              <div class="account-panel-line"></div>
+            </div>
+
+            <div class="account-malgroup">
+              <input type="checkbox" id="accConnectMal" class="account-malcheck">
+
+              <label class="account-malcheck-label" for="accConnectMal">
+                <div class="account-maltext">
+                  <div class="account-maltitle">Connect your MAL</div>
+                  <div class="account-malsub">Enable MAL sync features (later). Optional.</div>
+                </div>
+
+                <span class="account-switch" aria-hidden="true"></span>
+              </label>
+
+              <div class="account-malfields">
+                <div class="account-grid">
+                  <div class="account-field">
+                    <label class="account-label" for="accMalUsername">MAL Username</label>
+                    <input id="accMalUsername" class="account-input" type="text" placeholder="Your MyAnimeList username">
+                  </div>
+                </div>
+
+                <div class="account-actions">
+                  <button class="account-btn" type="button">Save MAL settings</button>
+                  <button class="account-btn danger ghost" type="button">Disconnect</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- EXTRAS / UNIQUE -->
+          <section class="account-panel" aria-label="Quick actions">
+            <div class="account-panel-head">
+              <h3 class="account-panel-title">Quick actions</h3>
+              <div class="account-panel-line"></div>
+            </div>
+
+            <div class="account-actions">
+              <button class="account-btn ghost" type="button">
+                Export my data
+              </button>
+              <button class="account-btn danger" type="button">
+                Sign out
+              </button>
+            </div>
+
+            <div class="account-note">
+              Tip: later we’ll wire these buttons to your Cloudflare database + MAL middleman.
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </main>
+
+
+    <!-- PROFILE VIEW (blank for now) -->
+    <main id="profileView" class="view" hidden></main>
+
+
+<!-- SETTINGS VIEW -->
+
+<main id="settingsView" class="view" hidden>
+
+  <div class="settings-page-wrap">
+    <section class="settings-panel settings-page-panel" aria-label="Settings">
+      <!-- LEFT NAV -->
+      <aside class="settings-left">
+        <div>
+          <div class="settings-title">Settings</div>
+          <div class="settings-left-divider"></div>
+        </div>
+
+        <nav class="settings-nav" id="settingsPageNav" aria-label="Settings sections">
+          <button class="settings-nav-item" type="button" data-section="personalization">Personalization</button>
+          <button class="settings-nav-item" type="button" data-section="appearance">Appearance</button>
+          <button class="settings-nav-item" type="button" data-section="import">Import</button>
+          <button class="settings-nav-item" type="button" data-section="export">Export</button>
+        </nav>
+      </aside>
+
+      <!-- RIGHT CONTENT -->
+      <section class="settings-right">
+        <div class="settings-content" id="settingsPageContent">
+          <div class="settings-empty"></div>
+        </div>
+      </section>
+    </section>
+  </div>
+</main>
+
+
+    <!-- STATISTICS VIEW (blank for now) -->
+    <main id="statisticsView" class="view" hidden>
+        <div class="empty-state">
+            <i class="fas fa-chart-pie"></i>
+            <h2>Statistics</h2>
+            <p>This page is ready. We’ll move your stats UI here next.</p>
+        </div>
+    </main>
+
+    <!-- ENTRY DETAILS VIEW (FULL PAGE — no modal) -->
+    <main id="entryDetailsView" class="view entrydetails-view" hidden>
+
+        <section class="entrydetails-page" id="entryDetailsPage">
+
+            <!-- Page controls -->
+        
+
+            
+
+            <div class="detail-header" id="entryDetailsHeader">
+
+                <div class="detail-layout">
+                    <!-- LEFT / MAIN -->
+                    <section class="detail-main">
+                        <div class="detail-top">
+                            <div class="detail-poster" id="entryDetailsAnimeImage">
+                                <i class="fas fa-image"></i>
+                            </div>
+
+                            <div class="detail-main-info">
+                                <h2 class="detail-title" id="entryDetailsAnimeTitle" hidden></h2>
+                                <div class="detail-subtitle" id="entryDetailsAnimeFormat" hidden></div>
+
+                                <div class="detail-divider"></div>
+
+                                <div class="detail-synopsis" id="entryDetailsSynopsis"></div>
+                            </div>
+                        </div>
+
+                        <div class="detail-stats">
+                            <div class="detail-stat">
+                                <div class="detail-stat-value" id="entryDetailsPremieredValue"></div>
+                                <div class="detail-stat-label">Premiered</div>
+                            </div>
+                            <div class="detail-stat">
+                                <div class="detail-stat-value" id="entryDetailsEpisodesValue"></div>
+                                <div class="detail-stat-label">Episodes</div>
+                            </div>
+                            <div class="detail-stat">
+                                <div class="detail-stat-value" id="entryDetailsDurationValue"></div>
+                                <div class="detail-stat-label">Duration (per ep.)</div>
+                            </div>
+                            <div class="detail-stat">
+                                <div class="detail-stat-value" id="entryDetailsMalScoreValue"></div>
+                                <div class="detail-stat-label">MAL Score</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- RIGHT / SIDEBAR -->
+                    <aside class="detail-side">
+                        <div class="detail-panel">
+                            <div class="detail-panel-title">Information</div>
+                            <div class="detail-panel-body">
+                                <div class="detail-row"><span class="detail-label">Japanese:</span>  <span class="detail-value" id="entryDetailsInfoJapanese"></span></div>
+                                <div class="detail-row"><span class="detail-label">English:</span>   <span class="detail-value" id="entryDetailsInfoEnglish"></span></div>
+                                <div class="detail-row"><span class="detail-label">Status:</span>    <span class="detail-value" id="entryDetailsInfoStatus"></span></div>
+                                <div class="detail-row"><span class="detail-label">Aired:</span>     <span class="detail-value" id="entryDetailsInfoAired"></span></div>
+                                <div class="detail-row"><span class="detail-label">Broadcast:</span> <span class="detail-value" id="entryDetailsInfoBroadcast"></span></div>
+                                <div class="detail-row"><span class="detail-label">Producers:</span> <span class="detail-value" id="entryDetailsInfoProducers"></span></div>
+                                <div class="detail-row"><span class="detail-label">Licensors:</span> <span class="detail-value" id="entryDetailsInfoLicensors"></span></div>
+                                <div class="detail-row"><span class="detail-label">Studios:</span>   <span class="detail-value" id="entryDetailsInfoStudios"></span></div>
+                                <div class="detail-row"><span class="detail-label">Source:</span>    <span class="detail-value" id="entryDetailsInfoSource"></span></div>
+                                <div class="detail-row"><span class="detail-label">Rating:</span>    <span class="detail-value" id="entryDetailsInfoAgeRating"></span></div>
+                            </div>
+                        </div>
+
+                        <div class="detail-panel" id="entryDetailsRelationsPanel" style="display:none;">
+                            <div class="detail-panel-title">Relations</div>
+                            <div class="detail-panel-body">
+                                <ul class="relations-list" id="entryDetailsRelationsList"></ul>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+
+                <!-- kept same structure (not modal-related) -->
+                
+                <div id="entryDetailsLinkedSwitchBar" class="linked-switch-bar" hidden>
+                    <button id="entryDetailsPrevBtn" class="linked-switch-btn" aria-label="Previous linked entry">
+                        <i class="fas fa-chevron-left"></i><span>Prev</span>
+                    </button>
+                    <button id="entryDetailsNextBtn" class="linked-switch-btn" aria-label="Next linked entry">
+                        <span>Next</span><i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+
+                <div id="entryDetailsActionDrawer" class="detail-drawer" aria-hidden="true" inert tabindex="-1">
+                    <button id="entryDetailsEditAnimeBtn" class="action-btn edit-btn" title="Edit"><i class="fas fa-edit"></i></button>
+                    <button id="entryDetailsRearrangeBtn" class="action-btn rearrange-btn" title="Reposition"><i class="fas fa-arrows-alt"></i></button>
+                    <button id="entryDetailsFavoriteBtn" class="action-btn favorite-btn" title="Toggle favorite" aria-pressed="false"><i class="fas fa-star"></i></button>
+                    <button id="entryDetailsDeleteAnimeBtn" class="action-btn delete-btn" title="Delete"><i class="fas fa-trash"></i></button>
+                    <button id="entryDetailsChangeBgBtn" class="action-btn bg-btn" title="Change background"><i class="fas fa-palette"></i></button>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+
+
+
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal">&times;</button>
+            <h2 class="modal-title">Import Anime</h2>
+
+
+<div class="form-group">
+    <label for="importFile">Import the exported JSON or XML file</label>
+    <input type="file" id="importFile" accept=".json,.xml,.txt" class="form-control">
+</div>
+
+            <div class="import-preview" id="importPreview">
+                <div class="import-preview-empty">Upload a file to preview entries…</div>
+            </div>
+
+
+            <div class="btn-group">
+                <button type="button" id="processImportBtn" class="btn" disabled>
+                    <i class="fas fa-file-import"></i> Import Entries
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="addEditModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-actions" role="toolbar" aria-label="Modal actions">
+                <button type="button" id="fillByMalBtn" class="icon-btn" title="MAL Fill" aria-label="MAL Fill">
+                    <i class="fas fa-magic"></i>
+                </button>
+                <button type="button" id="linkSequelBtn" class="icon-btn" title="Link Preq/Seq" aria-label="Link Preq/Seq">
+                    <i class="fas fa-link"></i>
+                </button>
+                <button type="submit" class="icon-btn" form="animeForm" title="Save" aria-label="Save">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="icon-btn danger close-modal" title="Close" aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <h2 class="modal-title" id="modalTitle">ADD NEW ENTRY</h2>
+
+
+            <form id="animeForm" novalidate>
+                <div class="form-two-col">
+                    <aside class="left-col">
+                        <!-- Display Picture -->
+                        <div class="form-row image-row">
+                            <div class="form-group image-upload">
+
+                                <!-- Preview -->
+                                <div id="imagePreview" class="image-preview">
+                                    <i class="fas fa-image"></i>
+                                </div>
+
+                                <!-- Actions (icon-only, beside the display picture) -->
+                                <div class="image-actions" role="toolbar" aria-label="Image actions">
+                                    <button type="button" id="uploadImageBtn" class="icon-btn" title="Upload" aria-label="Upload">
+                                        <i class="fas fa-upload"></i>
+                                    </button>
+                                    <button type="button" id="urlImageBtn" class="icon-btn" title="URL Paste" aria-label="URL Paste">
+                                        <i class="fas fa-clipboard"></i>
+                                    </button>
+                                </div>
+
+
+                                <!-- Hidden file input -->
+                                <input id="imageUpload" type="file" accept="image/*" hidden>
+
+                                <!-- URL input (toggle) -->
+                                <div id="urlInputGroup" style="display:none; margin-top:10px;">
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                    <section class="right-col">
+                        <!-- row 1: Title (80%) | Type (20%) -->
+                        <div class="form-row row-title-type">
+                            <div class="form-group">
+                                <label for="animeTitle">Title</label>
+                                <input id="animeTitle" class="form-control" type="text" placeholder="e.g. Violet Evergarden" />
+                            </div>
+                            <div class="form-group">
+                                <label for="animeSubtitle">Type</label>
+                                <select id="animeSubtitle" class="form-control">
+                                    <option>TV</option>
+                                    <option>Movie</option>
+                                    <option>ONA</option>
+                                    <option>OVA</option>
+                                    <option>Special</option>
+                                    <option>Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- row 2: Season | Completed -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="animeSeason">Premiered</label>
+                                <input id="animeSeason" class="form-control" type="text" placeholder="e.g. Fall 2016" />
+                            </div>
+                            <div class="form-group">
+                                <label for="animeStatus">Status</label>
+                                <select id="animeStatus" class="form-control">
+                                    <option>Completed</option>
+                                    <option>Watching</option>
+                                    <option>On Hold</option>
+                                    <option>Plan to Watch</option>
+                                    <option>Dropped</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- row 3: Genres | Themes -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="animeGenres">Genres</label>
+                                <input id="animeGenres" class="form-control" type="text" placeholder="e.g. Drama, Fantasy" />
+                            </div>
+                            <div class="form-group">
+                                <label for="animeThemes">Themes</label>
+                                <input id="animeThemes" class="form-control" type="text" placeholder="e.g. Iyashikei, Coming of Age" />
+                            </div>
+                        </div>
+
+                        <!-- row 4: Episodes | Duration -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="animeEpisodes">Episodes</label>
+                                <input id="animeEpisodes" class="form-control" type="number" min="1" placeholder="Number" />
+                            </div>
+                            <div class="form-group">
+                                <label for="animeDuration">Duration</label>
+                                <input id="animeDuration" class="form-control" type="text" placeholder="24m or 1h 24m" />
+                            </div>
+                        </div>
+
+                        <!-- row 5: Rating | MAL Score -->
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="animeRating">Rating (1–10)</label>
+                                <input id="animeRating" class="form-control" type="number" min="1" max="10" step="0.1" placeholder="Your score" />
+                            </div>
+                            <div class="form-group">
+                                <label for="malScore">MAL Score</label>
+                                <input id="malScore" class="form-control" type="number" step="0.01" placeholder="ex: 6.45" readonly />
+                            </div>
+                        </div>
+
+
+                        <!-- footer: link buttons + existing actions -->
+                    </section>
+                </div>
+            </form>
+
+
+
+
+        </div>
+    </div>
+
+    <div id="detailModal" class="modal detail-modal">
+    <div class="modal-content detail-stage">
+        <button class="close-modal detail-close" aria-label="Close detail modal">
+            <span aria-hidden="true">&times;</span>
+        </button>
+
+        <button id="detailMenuBtn" class="close-modal detail-menu-btn" aria-label="Entry options" title="Entry options">
+            <i class="fas fa-ellipsis-v" aria-hidden="true"></i>
+        </button>
+
+        <div class="detail-header" id="detailHeader">
+
+            <div class="detail-layout">
+                <!-- LEFT / MAIN -->
+                <section class="detail-main">
+                    <div class="detail-top">
+                        <div class="detail-poster" id="detailAnimeImage">
+                            <i class="fas fa-image"></i>
+                        </div>
+
+                        <div class="detail-main-info">
+                            <h2 class="detail-title" id="detailAnimeTitle" hidden></h2>
+                            <div class="detail-subtitle" id="detailAnimeFormat" hidden></div>
+
+                            <div class="detail-divider"></div>
+
+                            <!-- Synopsis (MAL sync will fill later) -->
+                            <div class="detail-synopsis" id="detailSynopsis">
+                                <!-- leave blank; filled by MAL sync -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom stats row -->
+                    <div class="detail-stats">
+                        <div class="detail-stat">
+                            <div class="detail-stat-value" id="detailPremieredValue"></div>
+                            <div class="detail-stat-label">Premiered</div>
+                        </div>
+                        <div class="detail-stat">
+                            <div class="detail-stat-value" id="detailEpisodesValue"></div>
+                            <div class="detail-stat-label">Episodes</div>
+                        </div>
+                        <div class="detail-stat">
+                            <div class="detail-stat-value" id="detailDurationValue"></div>
+                            <div class="detail-stat-label">Duration (per ep.)</div>
+                        </div>
+                        <div class="detail-stat">
+                            <div class="detail-stat-value" id="detailMalScoreValue"></div>
+                            <div class="detail-stat-label">MAL Score</div>
+                        </div>
+                                            </div>
+                </section>
+
+                <!-- RIGHT / SIDEBAR -->
+                <aside class="detail-side">
+                    <div class="detail-panel">
+                        <div class="detail-panel-title">Information</div>
+                        <div class="detail-panel-body">
+                            <div class="detail-row">
+                                <span class="detail-label">Japanese:</span>
+                                <span class="detail-value" id="detailInfoJapanese"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">English:</span>
+                                <span class="detail-value" id="detailInfoEnglish"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Status:</span>
+                                <span class="detail-value" id="detailInfoStatus"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Aired:</span>
+                                <span class="detail-value" id="detailInfoAired"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Broadcast:</span>
+                                <span class="detail-value" id="detailInfoBroadcast"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Producers:</span>
+                                <span class="detail-value" id="detailInfoProducers"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Licensors:</span>
+                                <span class="detail-value" id="detailInfoLicensors"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Studios:</span>
+                                <span class="detail-value" id="detailInfoStudios"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Source:</span>
+                                <span class="detail-value" id="detailInfoSource"></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Rating:</span>
+                                <span class="detail-value" id="detailInfoAgeRating"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-panel" id="detailRelationsPanel" style="display:none;">
+    <div class="detail-panel-title">Relations</div>
+    <div class="detail-panel-body">
+        <ul class="relations-list" id="detailRelationsList"></ul>
+    </div>
+</div>
+
+                </aside>
+            </div>
+
+            <!-- Keep these (JS references them / hides legacy drawer UI already) -->
+            <button id="detailDrawerToggle" class="detail-drawer-toggle" aria-expanded="false" aria-controls="detailActionDrawer" title="Actions" aria-label="Open actions">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <div id="linkedSwitchBar" class="linked-switch-bar" hidden>
+                <button id="detailPrevBtn" class="linked-switch-btn" aria-label="Previous linked entry">
+                    <i class="fas fa-chevron-left"></i><span>Prev</span>
+                </button>
+                <button id="detailNextBtn" class="linked-switch-btn" aria-label="Next linked entry">
+                    <span>Next</span><i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+
+            <div id="detailActionDrawer" class="detail-drawer" aria-hidden="true" inert tabindex="-1">
+                <button id="editAnimeBtn" class="action-btn edit-btn" title="Edit">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button id="rearrangeBtn" class="action-btn rearrange-btn" title="Reposition">
+                    <i class="fas fa-arrows-alt"></i>
+                </button>
+                <button id="favoriteBtn" class="action-btn favorite-btn" title="Toggle favorite" aria-pressed="false">
+                    <i class="fas fa-star"></i>
+                </button>
+                <button id="deleteAnimeBtn" class="action-btn delete-btn" title="Delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <button id="changeBgBtn" class="action-btn bg-btn" title="Change background">
+                    <i class="fas fa-palette"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+
+    <!-- Background Change Dock (tiny bottom-left, icon-only, no overlay) -->
+    <div id="bgChangeDock" class="bg-dock" role="dialog" aria-label="Background actions" aria-modal="false" hidden>
+        <div class="dock-row" role="toolbar">
+            <button id="bgUploadBtn" class="icon-btn" title="Upload from PC" aria-label="Upload"><i class="fas fa-upload"></i></button>
+            <button id="bgClipboardBtn" class="icon-btn" title="Paste URL" aria-label="Clipboard"><i class="fas fa-clipboard"></i></button>
+            <button id="bgRemoveBtn" class="icon-btn danger" title="Remove background" aria-label="Remove"><i class="fas fa-trash"></i></button>
+            <button id="bgCoverBtn" class="icon-btn" title="Use cover" aria-label="Cover"><i class="fas fa-image"></i></button>
+            <button id="bgBlurToggleBtn" class="icon-btn toggle" title="Blur on/off" aria-label="Blur" aria-pressed="false"><i class="fas fa-droplet"></i></button>
+            <button id="bgSaveBtn" class="icon-btn success" title="Save" aria-label="Save"><i class="fas fa-check"></i></button>
+        </div>
+        <input id="bgFileInput" type="file" accept="image/*" hidden>
+    </div>
+
+
+
+
+
+
+    <div id="ViewStats" class="modal">
+        <div class="modal-content">
+            <button class="close-modal">&times;</button>
+            <h2 class="modal-title">Statistics</h2>
+
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-value" id="modalTotalEntries">0</div>
+
+                    <!-- NEW: StatsMode inline navigator -->
+                    <div class="stat-label" id="statsModeNav" style="display:flex;justify-content:center;align-items:center;gap:10px;">
+                        <button id="statsModePrev" class="year-arrow-btn" aria-label="Previous">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span id="statsModeLabel">Total Completed</span>
+                        <button id="statsModeNext" class="year-arrow-btn" aria-label="Next">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-value" id="modalTotalEpisodes">0</div>
+                    <div class="stat-label">Episodes Watched</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="modalAverageRating">0.0</div>
+                    <div class="stat-label">Average Rating</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="modalAnimeDays">0.00</div>
+                    <div class="stat-label">Anime Days</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="modalElapsedDays">0</div>
+                    <div class="stat-label">
+                        Days Elapsed
+                        <button class="period-options-btn" style="opacity: 0; transition: opacity 0.3s ease;">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                        <div class="period-options-menu">
+                            <div class="date-inputs">
+                                <div class="date-input">
+                                    <label for="startDateInput">From</label>
+                                    <input type="date" id="startDateInput" class="date-picker">
+                                </div>
+                                <div class="date-input">
+                                    <label for="endDateInput">To</label>
+                                    <input type="date" id="endDateInput" class="date-picker">
+                                </div>
+                            </div>
+                            <button type="button" id="savePeriodBtn" class="btn">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="stats-columns">
+                <div class="stats-column">
+                    <div class="stat-section">
+                        <h3 class="section-title">Score Distribution</h3>
+                        <div id="scoreDistribution" class="chart-container scrollable"></div>
+                    </div>
+                    <div class="stat-section">
+                        <h3 class="section-title">Genre Distribution</h3>
+                        <div id="topGenres" class="chart-container scrollable"></div>
+                    </div>
+                </div>
+
+                <div class="stats-column">
+                    <div class="stat-section">
+                        <h3 class="section-title">Seasonal Distribution</h3>
+                        <div class="year-selector">
+                            <button id="prevYearBtn" class="year-arrow-btn"><i class="fas fa-chevron-left"></i></button>
+                            <div id="currentYearDisplay">2024</div>
+                            <button id="nextYearBtn" class="year-arrow-btn"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                        <div id="seasonalStats" class="chart-container scrollable">
+                            <div class="season-row">
+                                <div class="season-label">Winter</div>
+                                <div class="bar-container">
+                                    <div class="season-bar" style="width: 75%">
+                                        <span class="bar-value">34</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="season-row">
+                                <div class="season-label">Spring</div>
+                                <div class="bar-container">
+                                    <div class="season-bar" style="width: 80%">
+                                        <span class="bar-value">35</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="season-row">
+                                <div class="season-label">Summer</div>
+                                <div class="bar-container">
+                                    <div class="season-bar" style="width: 75%">
+                                        <span class="bar-value">34</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="season-row">
+                                <div class="season-label">Fall</div>
+                                <div class="bar-container">
+                                    <div class="season-bar" style="width: 65%">
+                                        <span class="bar-value">23</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+
+
+                    <div class="stat-section">
+                        <h3 class="section-title">Format Distribution</h3>
+                        <div id="formatDistribution" class="chart-container scrollable"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+        <aside id="sidebar" class="sidebar">
+        <!-- HEADER -->
+        <div class="sb-header">
+            <span class="sb-title">Menu</span>
+            <button id="closeSidebar" class="sb-close" aria-label="Close menu">×</button>
+        </div>
+
+        <!-- MENU -->
+        <nav class="sb-menu">
+            <button id="profileFab" class="sb-item" type="button">
+                <i class="fas fa-user"></i><span>Profile</span>
+            </button>
+
+            <button id="accountFab" class="sb-item" type="button">
+                <i class="fas fa-id-card"></i><span>Account</span>
+            </button>
+
+            <button id="settingsFab" class="sb-item" type="button">
+                <i class="fas fa-cog"></i><span>Settings</span>
+            </button>
+        </nav>
+    </aside>
+
+
+
+    <!-- SETTINGS MODAL -->
+    <div id="settingsModal" class="modal settings-modal" aria-hidden="true">
+        <div class="modal-content settings-panel">
+            <button class="close-modal" data-close="#settingsModal" aria-label="Close">&times;</button>
+
+            <!-- LEFT: sidebar -->
+            <aside class="settings-left">
+                <h2 class="settings-title">Settings</h2>
+                <div class="settings-left-divider"></div>
+
+                <nav id="settingsNav" class="settings-nav">
+                    <button class="settings-nav-item" data-section="personalization">
+                        <i class="fas fa-sliders-h"></i> Personalization
+                    </button>
+
+                    <button class="settings-nav-item" data-section="import">
+                        <i class="fas fa-file-import"></i> Import
+                    </button>
+
+                    <button class="settings-nav-item" data-section="export">
+                        <i class="fas fa-file-export"></i> Export
+                    </button>
+
+                    <button class="settings-nav-item danger" data-section="reset">
+                        <i class="fas fa-trash-alt"></i> Reset
+                    </button>
+                </nav>
+
+            </aside>
+
+            <!-- RIGHT: content area (separate sibling in the grid) -->
+            <section class="settings-right">
+                <div id="settingsContent" class="settings-content">
+                    <div class="settings-empty">Select a section to continue.</div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+
+
+                <!-- Bulk Edit Floating Panel -->
+    <div id="bulkPanel" class="bulk-panel" aria-hidden="true">
+        <div class="bulk-options">
+            <label class="bulk-select-all bulk-option">
+                <input type="checkbox" id="bulkSelectAll">
+                <span>Select all entries</span>
+            </label>
+
+            <label class="bulk-action bulk-option bulk-fav">
+                <input type="checkbox" id="bulkFav">
+                <span>Add to favorites</span>
+            </label>
+
+            <label class="bulk-action bulk-option bulk-link">
+                <input type="checkbox" id="bulkLinkRelations">
+                <span>Link entries together</span>
+            </label>
+
+            <label class="bulk-action bulk-option bulk-delete danger">
+                <input type="checkbox" id="bulkDelete">
+                <span>Delete selected entries</span>
+            </label>
+        </div>
+
+<div class="bulk-cta">
+    <button id="bulkApplyBtn" class="bulk-text-btn">Apply Changes</button>
+    <button id="bulkCancelBtn" class="bulk-text-btn bulk-cancel">Cancel</button>
+</div>
+
+    </div>
+
+
+
+
+    <script src="app.js"></script>
+</body>
+
+</html>
