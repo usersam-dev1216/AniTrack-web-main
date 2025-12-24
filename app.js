@@ -6048,21 +6048,30 @@ try {
     for (const id of list) setHTML(id, html);
   };
 
-  // --- bottom stats ---
-  const inferredPremiered =
-  a.premiered ||
-  a.premieredTimeline ||
-  mi?.premiered ||
-  inferPremieredTimelineFromMAL(a?.__malRaw || null) ||
-  earliestSeason(seasons);
-
-setTextAny(['entryDetailsPremieredValue', 'detailPremieredValue'], inferredPremiered);
-  setTextAny(['entryDetailsEpisodesValue',  'detailEpisodesValue' ], totalEps(seasons));
-  setTextAny(['entryDetailsDurationValue',  'detailDurationValue' ], a.duration || firstDuration(seasons));
-  setTextAny(['entryDetailsMalScoreValue',  'detailMalScoreValue' ], (typeof a.malScore === 'number') ? a.malScore.toFixed(2) : 'N/A');
-
   // --- right panel: Information ---
   const mi = a.malInfo || {};
+
+  // --- bottom stats ---
+  const inferredPremiered =
+    a.premieredTimeline ||
+    a.premiered ||
+    mi.premiered ||
+    inferPremieredTimelineFromMAL(a?.__malRaw || null) ||
+    earliestSeason(seasons) ||
+    'N/A';
+
+  const inferredDuration =
+    a.duration ||
+    mi.duration ||
+    firstDuration(seasons) ||
+    'N/A';
+
+  setTextAny(['entryDetailsPremieredValue', 'detailPremieredValue'], inferredPremiered);
+  setTextAny(['entryDetailsEpisodesValue',  'detailEpisodesValue' ], totalEps(seasons) || 'N/A');
+  setTextAny(['entryDetailsDurationValue',  'detailDurationValue' ], inferredDuration);
+  setTextAny(['entryDetailsMalScoreValue',  'detailMalScoreValue' ],
+    (typeof a.malScore === 'number') ? a.malScore.toFixed(2) : 'N/A'
+  );
 
   setTextAny(['entryDetailsInfoJapanese',  'detailInfoJapanese' ], mi.japaneseTitle || a.japaneseTitle || a.titleJapanese || a.altTitles?.ja);
   setTextAny(['entryDetailsInfoEnglish',   'detailInfoEnglish'  ], mi.englishTitle  || a.englishTitle  || a.titleEnglish  || a.altTitles?.en);
@@ -6772,12 +6781,15 @@ const ratingStr = String(d?.rating || '');
     themes: [],
 
     malScore: (typeof d?.mean === 'number') ? d.mean : null,
-    duration: '',
+    premieredTimeline: premiered || '',
+    duration: durationStr || '',
     aired: airedTxt,
 
     malInfo: {
       japaneseTitle: d?.alternative_titles?.ja || '',
       englishTitle: d?.alternative_titles?.en || '',
+      premiered: premiered || '',
+      duration: durationStr || '',
       status,
       aired: airedTxt,
       broadcast: broadcastStr,
@@ -6861,6 +6873,14 @@ if (!full) throw new Error('MAL details missing data payload');
 
         synopsis: mapped?.description ?? '',
         malScore: mapped?.malScore ?? null,
+
+        // ✅ persist stats so EntryDetails always has them next time
+        premieredTimeline: mapped?.premieredTimeline || mapped?.seasons?.[0]?.season || '',
+        duration: mapped?.duration || mapped?.seasons?.[0]?.duration || '',
+        aired: mapped?.aired || '',
+
+        // ✅ persist seasons so firstDuration/totalEps work reliably
+        seasons: Array.isArray(mapped?.seasons) ? mapped.seasons : [],
 
         // keep the richer MAL info object
         malInfo: mapped?.malInfo ?? null,
