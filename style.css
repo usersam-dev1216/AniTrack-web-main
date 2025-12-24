@@ -578,7 +578,7 @@ color: var(--text-secondary);
     width: 278px;
     height: 417px;
   }
-}
+
 @media (max-width: 720px) {
   .spotlight-cover-overlay {
     display: none !important;
@@ -3554,7 +3554,7 @@ select.form-control option {
   padding: 10px 10px 10px 10px;
 }
 
-}
+
 
 
 

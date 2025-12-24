@@ -1910,12 +1910,117 @@ function fillHomeRow(rowEl, list, limit = 14){
 // Spotlight state (kept stable between renders)
 let __spotlightIds = [];
 let __spotlightIndex = 0;
+
+// Home empty-state recommendations (when animeList is empty)
+let __homeSpotlightPool = [];     // the objects Spotlight should read from
+let __homeEmptyLoaded = false;    // cache flag so we don't refetch every render
+let __homeEmptyLoading = false;
+
+// helper: shuffle + pick N
+function pickRandom(arr, n) {
+  const a = (arr || []).slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, n);
+}
+
+// Map your MAL/Jikan-like objects into the SAME shape your Home cards expect
+function malLikeToHomeEntry(x, fallbackSeasonLabel = '') {
+  const malId = x?.mal_id ?? x?.id;
+  const img =
+    x?.images?.jpg?.large_image_url ||
+    x?.images?.jpg?.image_url ||
+    x?.image ||
+    '';
+
+  const seasonStr = x?.season || fallbackSeasonLabel || '';
+  const typeStr = x?.type || x?.media_type || '';
+
+  return {
+    id: `mal:${String(malId)}`,       // IMPORTANT: mark as external
+    title: x?.title || '',
+    image: img,
+    malScore: x?.score ?? x?.mean ?? null,
+    subtitle: typeStr,
+    seasons: seasonStr ? [{ season: seasonStr, format: typeStr }] : [],
+    isFavorite: false
+  };
+}
+
+// Load 30 recommendations for EMPTY state:
+// 10 most popular, 10 currently airing, 10 upcoming
+async function loadHomeEmptyStateRecs() {
+  if (__homeEmptyLoaded || __homeEmptyLoading) return;
+  __homeEmptyLoading = true;
+
+  try {
+    // fetch bigger lists then randomly pick 10 from each
+    const [popularRaw, airingRaw, upcomingRaw] = await Promise.all([
+      jikanFetchMostPopular({ limit: 50 }),
+      jikanFetchTopAiring({ limit: 50 }),
+      jikanFetchUpcoming({ limit: 50 })
+    ]);
+
+    const popular10 = pickRandom(popularRaw, 10).map(x => malLikeToHomeEntry(x));
+    const airing10  = pickRandom(airingRaw, 10).map(x => malLikeToHomeEntry(x));
+    const upcoming10= pickRandom(upcomingRaw, 10).map(x => malLikeToHomeEntry(x));
+
+    // Spotlight = all 30 combined
+    __homeSpotlightPool = [...popular10, ...airing10, ...upcoming10];
+
+    // Spotlight ids should match these objects
+    __spotlightIds = __homeSpotlightPool.map(a => String(a.id));
+    __spotlightIndex = 0;
+
+    // Fill the 3 home rows too
+    fillHomeRow(homeTopAiringRow, airing10, 1000);
+    fillHomeRow(homeFavoritesRow, popular10, 1000);
+    fillHomeRow(homeRecentRow, upcoming10, 1000);
+
+    __homeEmptyLoaded = true;
+  } catch (e) {
+    console.warn('Home empty-state MAL load failed:', e);
+  } finally {
+    __homeEmptyLoading = false;
+  }
+}
 let __spotlightKey = '';
 
 function renderHomePage() {
   if (!homeView) return;
 
   const all = Array.isArray(animeList) ? animeList.slice() : [];
+
+  // ✅ EMPTY STATE: load MAL recommendations (30 items) + fill rows
+  if (!all.length) {
+    // Kick off fetch once, then re-render when ready
+    loadHomeEmptyStateRecs().then(() => {
+      // only re-render if we're still on home
+      if ((location.hash || '#home').startsWith('#home')) {
+        // update spotlight UI after data arrives
+        if (__spotlightIndex >= __spotlightIds.length) __spotlightIndex = 0;
+        updateSpotlightUI();
+      }
+    });
+
+    // Hide the old "Nothing here yet" cards by showing loading placeholders only once
+    if (!__homeEmptyLoaded) {
+      fillHomeRow(homeTopAiringRow, [], 1000);
+      fillHomeRow(homeFavoritesRow, [], 1000);
+      fillHomeRow(homeRecentRow, [], 1000);
+    }
+
+    // Spotlight uses home pool in empty state
+    // (IDs are already prepared once load finishes)
+    if (__spotlightIndex >= __spotlightIds.length) __spotlightIndex = 0;
+    updateSpotlightUI();
+    return;
+  }
+
+  // ✅ NORMAL STATE (your existing logic) — keep Spotlight reading from animeList
+  __homeSpotlightPool = []; // IMPORTANT: clear so Spotlight reads animeList
 
   // Normalize "Fall 2022" from any messy season text
   const normSeasonLabel = (txt = '') => {
@@ -1930,7 +2035,6 @@ function renderHomePage() {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
-
   const currentSeasonLabel =
     month <= 3 ? `Winter ${year}` :
     month <= 6 ? `Spring ${year}` :
@@ -1978,7 +2082,7 @@ function renderHomePage() {
     .slice()
     .sort((a, b) => (Number(b.malScore) || 0) - (Number(a.malScore) || 0));
 
-    // --- Spotlight: pick random from ALL entries (cycles through everything) ---
+  // --- Spotlight: pick random from ALL entries (cycles through everything) ---
   const idSet = new Set();
   const pool = [];
   (all || []).forEach(a => {
@@ -1993,86 +2097,23 @@ function renderHomePage() {
     __spotlightKey = poolKey;
     __spotlightIndex = 0;
 
-    // shuffle the full pool so Next/Prev goes through all entries in random order
     const shuffled = pool.slice();
     for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = (Math.random() * (i + 1)) | 0;
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-
-    // NO slice cap: include every entry
     __spotlightIds = shuffled.map(a => String(a.id));
   }
 
-
-
-  if (homeSpotlight) {
-    const has = __spotlightIds.length > 0;
-    homeSpotlight.parentElement && (homeSpotlight.parentElement.hidden = !has);
-
-    if (has) {
-      // wire buttons once
-      if (!window.__spotlightWired) {
-        window.__spotlightWired = true;
-
-        spotlightNextBtn?.addEventListener('click', () => {
-  if (!__spotlightIds.length) return;
-  __spotlightIndex = (__spotlightIndex + 1) % __spotlightIds.length;
-  updateSpotlightUI(undefined, { direction: 'left' }); // swipe left = next
-});
-
-spotlightPrevBtn?.addEventListener('click', () => {
-  if (!__spotlightIds.length) return;
-  __spotlightIndex = (__spotlightIndex - 1 + __spotlightIds.length) % __spotlightIds.length;
-  updateSpotlightUI(undefined, { direction: 'right' }); // swipe right = previous
-});
-
-spotlightDetailBtn?.addEventListener('click', () => {
-  if (__spotlightIds.length) openEntryDetails(__spotlightIds[__spotlightIndex], 'home');
-});
-
-if (__spotlightIndex >= __spotlightIds.length) __spotlightIndex = 0;
-updateSpotlightUI();
-
-
-
-        // Ensure the Detail button is docked to the hero (stable position)
-(() => {
-  if (!homeSpotlight) return;
-
-  // Create the dock once
-  let dock = homeSpotlight.querySelector('.spotlight-detail-dock');
-  if (!dock) {
-    dock = document.createElement('div');
-    dock.className = 'spotlight-detail-dock';
-    homeSpotlight.appendChild(dock);
-  }
-
-  // Move the existing button into the dock (keeps same ID + listener)
-  if (spotlightDetailBtn && spotlightDetailBtn.parentElement !== dock) {
-    dock.appendChild(spotlightDetailBtn);
-  }
-})();
-
-spotlightDetailBtn?.addEventListener('click', () => {
-  if (__spotlightIds.length) openEntryDetails(__spotlightIds[__spotlightIndex], 'home');
-});
-
-
-
-      }
-
-if (__spotlightIndex >= __spotlightIds.length) __spotlightIndex = 0;
-updateSpotlightUI();
-
-    }
-  }
+  if (__spotlightIndex >= __spotlightIds.length) __spotlightIndex = 0;
+  updateSpotlightUI();
 
   // --- Rows ---
   fillHomeRow(homeTopAiringRow, topAiring, 1000);
   fillHomeRow(homeFavoritesRow, favs, 1000);
   fillHomeRow(homeRecentRow, upcoming, 1000);
 }
+
 
 function updateSpotlightUI({ watching = [], topAiring = [], upcoming = [] } = {}, opts = {}) {
   if (!homeSpotlight || !__spotlightIds.length) return;
@@ -2097,7 +2138,8 @@ function updateSpotlightUI({ watching = [], topAiring = [], upcoming = [] } = {}
   }
 
   const id = __spotlightIds[__spotlightIndex];
-  const a = (animeList || []).find(x => String(x.id) === String(id));
+  const pool = (__homeSpotlightPool && __homeSpotlightPool.length) ? __homeSpotlightPool : (animeList || []);
+const a = pool.find(x => String(x.id) === String(id));
   if (!a) return;
 
 
