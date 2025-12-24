@@ -2023,9 +2023,6 @@ function malLikeToHomeEntry(x, fallbackSeasonLabel = '') {
 
     malScore: x?.score ?? x?.mean ?? null,
     subtitle: typeStr,
-premiered,
-duration: durationStr,
-__malRaw: d,
 
     genres,
     synopsis,
