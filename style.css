@@ -104,7 +104,7 @@ body.route-settings .settings-page-panel{
 
   padding-inline: 200px;
   padding-block: 40px;
-
+  height: -webkit-fill-available;
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 28px;
