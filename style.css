@@ -68,10 +68,10 @@ body::before, body::after {
 }
 
 .sb-auth {
-  padding: 16px 22px;
+  padding: 22px 22px;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
   border-top: 1px solid rgba(255,255,255,0.06);
   font-size: 13px;
