@@ -1090,12 +1090,20 @@
     <i class="fas fa-id-card"></i><span>Account</span>
   </button>
 
-  <button id="settingsFab" class="sb-item" type="button">
-    <i class="fas fa-cog"></i><span>Settings</span>
-  </button>
-</nav>
+        <button class="sb-item" id="settingsFab" type="button">
+        <i class="fa-solid fa-gear"></i>
+        <span>Settings</span>
+      </button>
+    </nav>
 
-    </aside>
+    <!-- Bottom profile area (only shows when NOT logged in) -->
+    <div id="sbAuth" class="sb-auth" hidden>
+      <button id="sbLogin" class="sb-auth-link" type="button">Login</button>
+      <span class="sb-auth-sep">|</span>
+      <button id="sbSignup" class="sb-auth-link" type="button">Sign up</button>
+    </div>
+  </aside>
+
 
 
 

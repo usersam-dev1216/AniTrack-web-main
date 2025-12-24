@@ -57,6 +57,46 @@ body::before, body::after {
 }
 
 
+/* Sidebar bottom auth (Login | Sign up) */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+.sb-menu {
+  flex: 1;
+}
+
+.sb-auth {
+  padding: 16px 22px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 13px;
+}
+
+.sb-auth[hidden] {
+  display: none;
+}
+
+.sb-auth-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: #c084fc;
+  cursor: pointer;
+}
+
+.sb-auth-link:hover {
+  text-decoration: underline;
+}
+
+.sb-auth-sep {
+  opacity: 0.6;
+}
 
 
 

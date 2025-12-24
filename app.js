@@ -184,6 +184,16 @@ const profileFab  = $('#profileFab');
 const accountFab  = $('#accountFab');
 const settingsFab = $('#settingsFab');
 
+const sbAuth   = $('#sbAuth');
+const sbLogin  = $('#sbLogin');
+const sbSignup = $('#sbSignup');
+
+
+const AUTH_LS_KEY = 'AniTrack_CurrentUser';
+
+function isUserLoggedIn() {
+  return !!localStorage.getItem(AUTH_LS_KEY);
+}
 
 
 // Settings modal
@@ -5032,6 +5042,26 @@ document.body.addEventListener('click', (e) => {
   const modal = sel ? document.querySelector(sel) : closeBtn.closest('.modal');
   if (modal) closeWithAnimation(modal);
 });
+
+  // Sidebar bottom auth (only when logged out)
+  const refreshSidebarAuth = () => {
+    if (!sbAuth) return;
+    sbAuth.hidden = isUserLoggedIn();
+  };
+
+  refreshSidebarAuth();
+  window.addEventListener('storage', refreshSidebarAuth);
+
+  sbLogin?.addEventListener('click', () => {
+    closeSidebarFn();
+    location.hash = '#userlogin';
+  });
+
+  sbSignup?.addEventListener('click', () => {
+    closeSidebarFn();
+    location.hash = '#usersignup';
+  });
+
 
 
 // Bulk panel controls
