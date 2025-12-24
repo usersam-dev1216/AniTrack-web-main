@@ -57,6 +57,13 @@ body::before, body::after {
 }
 
 
+.sb-sep{
+  height: 1px;
+  margin: 10px 8px;
+  background: rgba(255,255,255,.10);
+}
+
+
 /* ===================== SETTINGS PAGE (route: #settings) ===================== */
 /* Make Settings behave like other pages: header in normal flow, content below it */
 body.route-settings header{

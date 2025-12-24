@@ -175,10 +175,15 @@ const sbInfoValue   = $('#sbInfoValue');
 const sbInfoLabel   = $('#sbInfoLabel');
 
 // Sidebar actions (main menu)
-const homeFab = $('#homeFab');
+const homeFab       = $('#homeFab');
+const browseFab     = $('#browseFab');
+const listFab       = $('#listFab');
+const statisticsFab = $('#statisticsFab');
+
 const profileFab  = $('#profileFab');
 const accountFab  = $('#accountFab');
 const settingsFab = $('#settingsFab');
+
 
 
 // Settings modal
@@ -4995,19 +5000,22 @@ function deleteCurrentAnime() {
 /* --------------------------- Event Wiring (UI) ---------------------------- */
 function setupEventListeners() {
   // Sidebar
-  sidebarToggle?.addEventListener('click', openSidebar);
-  closeSidebar?.addEventListener('click', closeSidebarFn);
-  [homeFab, profileFab, accountFab, settingsFab].filter(Boolean)
+sidebarToggle?.addEventListener('click', openSidebar);
+closeSidebar?.addEventListener('click', closeSidebarFn);
+
+[homeFab, browseFab, listFab, statisticsFab, profileFab, accountFab, settingsFab]
+  .filter(Boolean)
   .forEach(btn => btn.addEventListener('click', closeSidebarFn));
 
-  homeFab?.addEventListener('click', () => { location.hash = '#home'; });
+homeFab?.addEventListener('click', () => { location.hash = '#home'; });
+browseFab?.addEventListener('click', () => { location.hash = '#browse'; });
+listFab?.addEventListener('click', () => { location.hash = '#list'; });
+statisticsFab?.addEventListener('click', () => { location.hash = '#statistics'; });
 
+profileFab?.addEventListener('click', () => { location.hash = '#profile'; });
+accountFab?.addEventListener('click', () => { location.hash = '#account'; });
+settingsFab?.addEventListener('click', () => { location.hash = '#settings'; });
 
-  profileFab?.addEventListener('click', () => { location.hash = '#profile'; });
-  accountFab?.addEventListener('click', () => { location.hash = '#account'; });
-
-  // Settings open/nav
-  settingsFab?.addEventListener('click', () => { location.hash = '#settings'; });
 
   settingsNav?.addEventListener('click', (e) => {
     const btn = e.target.closest('.settings-nav-item');
