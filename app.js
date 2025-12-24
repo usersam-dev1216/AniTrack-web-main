@@ -1252,13 +1252,70 @@ function guessSeasonFromDate(dLike){
 
 
 function seasonKey(text = '') {
-  const m = String(text).match(/\b(Winter|Spring|Summer|Fall)\s+(19|20)\d{2}\b/i);
+  const m = String(text).match(/\b(Winter|Spring|Summer|Fall)\s+((?:19|20)\d{2})\b/i);
   if (!m) return { y: -Infinity, o: -Infinity };
   const name = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
-  const year = parseInt(m[2] + text.match(/\d{2}\b/)[0], 10); // keep original year full
+  const year = parseInt(m[2], 10);
   const ord  = SEASON_ORDER[name] || 0;
   return { y: year, o: ord };
 }
+
+// --- NEW: infer "Winter/Spring/Summer/Fall YYYY" from MAL data ---
+function inferPremieredTimelineFromMAL(d){
+  // Prefer MAL start_season if available
+  const ss = d?.start_season;
+  const yr = (typeof ss?.year === 'number') ? ss.year : null;
+  const s  = String(ss?.season || '').toLowerCase();
+
+  if (yr && s) {
+    const map = { winter:'Winter', spring:'Spring', summer:'Summer', fall:'Fall', autumn:'Fall' };
+    const name = map[s] || (s ? (s[0].toUpperCase() + s.slice(1)) : '');
+    if (name) return `${name} ${yr}`;
+  }
+
+  // Fallback to start_date month -> season
+  const start = String(d?.start_date || d?.aired?.from || '').slice(0,10);
+  const m = start.match(/^(\d{4})-(\d{2})-/);
+  if (!m) return '';
+
+  const year = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+
+  let season = '';
+  if (month >= 1 && month <= 3) season = 'Winter';
+  else if (month >= 4 && month <= 6) season = 'Spring';
+  else if (month >= 7 && month <= 9) season = 'Summer';
+  else if (month >= 10 && month <= 12) season = 'Fall';
+
+  return season ? `${season} ${year}` : '';
+}
+
+// --- NEW: "24 min" from seconds (MAL avg episode duration is seconds) ---
+function formatDurationSeconds(sec){
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const mins = Math.round(n / 60);
+  return mins > 0 ? `${mins} min` : '';
+}
+
+// --- NEW: neat status text ---
+function prettyAiringStatus(raw){
+  const s = String(raw || '').trim().toLowerCase();
+  if (!s) return '';
+  const map = {
+    currently_airing: 'Currently airing',
+    finished_airing: 'Finished airing',
+    not_yet_aired: 'Not aired yet',
+    not_aired_yet: 'Not aired yet'
+  };
+  if (map[s]) return map[s];
+
+  // generic snake_case -> Title case
+  return s
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
 
 function startOfLocalDay(d) {
   const x = new Date(d);
@@ -1966,6 +2023,9 @@ function malLikeToHomeEntry(x, fallbackSeasonLabel = '') {
 
     malScore: x?.score ?? x?.mean ?? null,
     subtitle: typeStr,
+premiered,
+duration: durationStr,
+__malRaw: d,
 
     genres,
     synopsis,
@@ -5992,7 +6052,14 @@ try {
   };
 
   // --- bottom stats ---
-  setTextAny(['entryDetailsPremieredValue', 'detailPremieredValue'], a.premiered || earliestSeason(seasons));
+  const inferredPremiered =
+  a.premiered ||
+  a.premieredTimeline ||
+  mi?.premiered ||
+  inferPremieredTimelineFromMAL(a?.__malRaw || null) ||
+  earliestSeason(seasons);
+
+setTextAny(['entryDetailsPremieredValue', 'detailPremieredValue'], inferredPremiered);
   setTextAny(['entryDetailsEpisodesValue',  'detailEpisodesValue' ], totalEps(seasons));
   setTextAny(['entryDetailsDurationValue',  'detailDurationValue' ], a.duration || firstDuration(seasons));
   setTextAny(['entryDetailsMalScoreValue',  'detailMalScoreValue' ], (typeof a.malScore === 'number') ? a.malScore.toFixed(2) : 'N/A');
@@ -6002,7 +6069,8 @@ try {
 
   setTextAny(['entryDetailsInfoJapanese',  'detailInfoJapanese' ], mi.japaneseTitle || a.japaneseTitle || a.titleJapanese || a.altTitles?.ja);
   setTextAny(['entryDetailsInfoEnglish',   'detailInfoEnglish'  ], mi.englishTitle  || a.englishTitle  || a.titleEnglish  || a.altTitles?.en);
-  setTextAny(['entryDetailsInfoStatus',    'detailInfoStatus'   ], mi.status        || a.airingStatus  || a.status);
+  const rawStatus = (mi.status || a.airingStatus || a.status || '');
+setTextAny(['entryDetailsInfoStatus', 'detailInfoStatus'], prettyAiringStatus(rawStatus));
   setTextAny(['entryDetailsInfoAired',     'detailInfoAired'    ], mi.aired         || a.aired);
   setTextAny(['entryDetailsInfoBroadcast', 'detailInfoBroadcast'], mi.broadcast     || a.broadcast);
   setTextAny(['entryDetailsInfoProducers', 'detailInfoProducers'], mi.producers     || a.producers);
@@ -6678,6 +6746,23 @@ function mapMalToEntryDetailsModel(d) {
 
   const status = d?.status || '';
 
+const premiered = inferPremieredTimelineFromMAL(d);
+const durationStr =
+  formatDurationSeconds(d?.average_episode_duration) ||
+  String(d?.duration || '');
+
+const broadcastStr =
+  String(d?.broadcast?.string || d?.broadcast || '');
+
+const producersStr =
+  Array.isArray(d?.producers) ? d.producers.map(x=>x?.name).filter(Boolean).join(', ') : '';
+
+const licensorsStr =
+  Array.isArray(d?.licensors) ? d.licensors.map(x=>x?.name).filter(Boolean).join(', ') : '';
+
+const sourceStr = String(d?.source || '');
+const ratingStr = String(d?.rating || '');
+
   return {
     id: `mal:${String(d?.id || '')}`,
 
@@ -6698,19 +6783,21 @@ function mapMalToEntryDetailsModel(d) {
       englishTitle: d?.alternative_titles?.en || '',
       status,
       aired: airedTxt,
-      broadcast: '',
-      producers: '',
-      licensors: '',
+      broadcast: broadcastStr,
+producers: producersStr,
+licensors: licensorsStr,
       studios: studios.join(', '),
-      source: '',
-      ageRating: ''
+      source: sourceStr,
+ageRating: ratingStr
     },
 
-    seasons: [{
-      episodes: (typeof d?.num_episodes === 'number') ? d.num_episodes : 0,
-      duration: '',
-      format: (d?.media_type || '').toUpperCase()
-    }],
+ seasons: [{
+  season: premiered,
+  episodes: (typeof d?.num_episodes === 'number') ? d.num_episodes : 0,
+  duration: durationStr,
+  format: (d?.media_type || '').toUpperCase()
+}],
+
 
     currentlyAiring: status === 'currently_airing'
   };
