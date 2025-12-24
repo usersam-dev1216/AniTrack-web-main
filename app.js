@@ -6077,13 +6077,14 @@ try {
   setTextAny(['entryDetailsInfoEnglish',   'detailInfoEnglish'  ], mi.englishTitle  || a.englishTitle  || a.titleEnglish  || a.altTitles?.en);
   const rawStatus = (mi.status || a.airingStatus || a.status || '');
 setTextAny(['entryDetailsInfoStatus', 'detailInfoStatus'], prettyAiringStatus(rawStatus));
-  setTextAny(['entryDetailsInfoAired',     'detailInfoAired'    ], mi.aired         || a.aired);
-  setTextAny(['entryDetailsInfoBroadcast', 'detailInfoBroadcast'], mi.broadcast     || a.broadcast);
-  setTextAny(['entryDetailsInfoProducers', 'detailInfoProducers'], mi.producers     || a.producers);
-  setTextAny(['entryDetailsInfoLicensors', 'detailInfoLicensors'], mi.licensors     || a.licensors);
-  setTextAny(['entryDetailsInfoStudios',   'detailInfoStudios'  ], mi.studios       || a.studios || a.studio);
-  setTextAny(['entryDetailsInfoSource',    'detailInfoSource'   ], mi.source        || a.source);
-  setTextAny(['entryDetailsInfoAgeRating', 'detailInfoAgeRating'], mi.ageRating     || a.ageRating || a.rating);
+ setTextAny(['entryDetailsInfoAired',     'detailInfoAired'    ], mi.aired     || a.aired     || 'N/A');
+setTextAny(['entryDetailsInfoBroadcast', 'detailInfoBroadcast'], mi.broadcast || a.broadcast || 'N/A');
+setTextAny(['entryDetailsInfoProducers', 'detailInfoProducers'], mi.producers || a.producers || 'N/A');
+setTextAny(['entryDetailsInfoLicensors', 'detailInfoLicensors'], mi.licensors || a.licensors || 'N/A');
+setTextAny(['entryDetailsInfoStudios',   'detailInfoStudios'  ], mi.studios   || a.studios || a.studio || 'N/A');
+setTextAny(['entryDetailsInfoSource',    'detailInfoSource'   ], mi.source    || a.source    || 'N/A');
+setTextAny(['entryDetailsInfoAgeRating', 'detailInfoAgeRating'], mi.ageRating || a.ageRating || a.rating || 'N/A');
+
 
   // --- Relations (support page + legacy modal IDs) ---
   const relPanel =
@@ -6737,148 +6738,7 @@ async function runBrowseSearch(q) {
 
 
 
-function mapMalToEntryDetailsModel(d) {
-  if (!d) return null;
 
-  // ---- helpers (kept local so you don’t need to hunt other parts of the file) ----
-  const monthName = (m) => ([
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December'
-  ][m] || '');
-
-  const ordinal = (n) => {
-    const x = Number(n);
-    if (!Number.isFinite(x)) return '';
-    const mod100 = x % 100;
-    if (mod100 >= 11 && mod100 <= 13) return `${x}th`;
-    const mod10 = x % 10;
-    if (mod10 === 1) return `${x}st`;
-    if (mod10 === 2) return `${x}nd`;
-    if (mod10 === 3) return `${x}rd`;
-    return `${x}th`;
-  };
-
-  const formatPrettyDate = (iso) => {
-    if (!iso) return '';
-    const dt = new Date(iso);
-    if (Number.isNaN(dt.getTime())) return String(iso); // fallback if MAL gives weird strings
-    const day = ordinal(dt.getUTCDate());
-    const mon = monthName(dt.getUTCMonth());
-    const year = dt.getUTCFullYear();
-    return `${day} ${mon}, ${year}`;
-  };
-
-  const formatPrettyDateRange = (startIso, endIso) => {
-    const a = formatPrettyDate(startIso);
-    const b = formatPrettyDate(endIso);
-    if (a && b) return a === b ? a : `${a} to ${b}`;
-    return a || b || '';
-  };
-
-  const capFirst = (s) => String(s || '').replace(/^\w/, c => c.toUpperCase());
-
-  const formatBroadcastMAL = (b) => {
-    if (!b) return '';
-    // MAL v2 usually returns: { day_of_week: "sunday", start_time: "17:00" }
-    if (typeof b === 'object') {
-      const day = b.day_of_week ? capFirst(String(b.day_of_week).toLowerCase()) : '';
-      const time = b.start_time ? String(b.start_time) : '';
-      const tz = b.timezone ? String(b.timezone) : '';
-      const out = [day, time && `at ${time}`, tz && `(${tz})`].filter(Boolean).join(' ');
-      return out || '';
-    }
-    if (typeof b === 'string') return b;
-    return '';
-  };
-
-  const prettyRating = (raw) => {
-    const s = String(raw || '').trim();
-    if (!s) return '';
-    const map = {
-      g: 'G',
-      pg: 'PG',
-      pg_13: 'PG-13',
-      r: 'R',
-      r_plus: 'R+',
-      rx: 'Rx'
-    };
-    const k = s.toLowerCase();
-    if (map[k]) return map[k];
-    return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  };
-
-  // ---- data extraction ----
-  const img = d?.main_picture?.large || d?.main_picture?.medium || '';
-
-  const genres = Array.isArray(d?.genres) ? d.genres.map(g => g?.name).filter(Boolean) : [];
-  const studios = Array.isArray(d?.studios) ? d.studios.map(s => s?.name).filter(Boolean) : [];
-
-  const premiered = inferPremieredTimelineFromMAL(d);
-
-  const durationStr =
-    formatDurationSeconds(d?.average_episode_duration) ||
-    (d?.episode_duration ? formatDurationSeconds(d.episode_duration) : '') ||
-    (typeof d?.duration === 'string' ? d.duration : '') ||
-    '';
-
-  const airedTxt = formatPrettyDateRange(d?.start_date, d?.end_date);
-
-  const broadcastStr = formatBroadcastMAL(d?.broadcast);
-
-  const producersStr =
-    Array.isArray(d?.producers) ? d.producers.map(x => x?.name).filter(Boolean).join(', ') : '';
-
-  const licensorsStr =
-    Array.isArray(d?.licensors) ? d.licensors.map(x => x?.name).filter(Boolean).join(', ') : '';
-
-  const sourceStr = String(d?.source || '');
-  const ratingStr = prettyRating(d?.rating);
-
-  const rawStatus = d?.status || '';
-
-  return {
-    id: `mal:${String(d?.id || '')}`,
-
-    title: d?.alternative_titles?.en || d?.title || d?.alternative_titles?.ja || 'Untitled',
-    image: img,
-    description: d?.synopsis || '',
-
-    type: (d?.media_type || '').toUpperCase(),
-    genres,
-    themes: [],
-
-    malScore: (typeof d?.mean === 'number') ? d.mean : null,
-
-    // ✅ top-level fields (some parts of your app read these directly)
-    premieredTimeline: premiered || '',
-    duration: durationStr || '',
-    aired: airedTxt,
-
-    // ✅ sidebar fields (EntryDetails reads these)
-    malInfo: {
-      japaneseTitle: d?.alternative_titles?.ja || '',
-      englishTitle: d?.alternative_titles?.en || '',
-      status: prettyAiringStatus(rawStatus),   // ✅ "Not aired yet" etc.
-      aired: airedTxt,
-      broadcast: broadcastStr,
-      producers: producersStr,
-      licensors: licensorsStr,
-      studios: studios.join(', '),
-      source: sourceStr,
-      ageRating: ratingStr
-    },
-
-    // ✅ stats row reads seasons[0].*
-    seasons: [{
-      season: premiered || '',
-      episodes: (typeof d?.num_episodes === 'number') ? d.num_episodes : 0,
-      duration: durationStr || '',
-      format: (d?.media_type || '').toUpperCase()
-    }],
-
-    currentlyAiring: String(rawStatus).toLowerCase() === 'currently_airing'
-  };
-}
 
 
 
