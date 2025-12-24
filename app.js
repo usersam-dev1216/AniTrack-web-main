@@ -1929,25 +1929,58 @@ function pickRandom(arr, n) {
 // Map your MAL/Jikan-like objects into the SAME shape your Home cards expect
 function malLikeToHomeEntry(x, fallbackSeasonLabel = '') {
   const malId = x?.mal_id ?? x?.id;
+
   const img =
     x?.images?.jpg?.large_image_url ||
     x?.images?.jpg?.image_url ||
+    x?.images?.webp?.large_image_url ||
+    x?.images?.webp?.image_url ||
     x?.image ||
     '';
 
   const seasonStr = x?.season || fallbackSeasonLabel || '';
-  const typeStr = x?.type || x?.media_type || '';
+  const typeStr = x?.type || x?.media_type || 'TV';
+
+  const genres = Array.isArray(x?.genres)
+    ? x.genres.map(g => g?.name).filter(Boolean).join(', ')
+    : '';
+
+  const episodes =
+    (typeof x?.episodes === 'number' ? x.episodes : null) ??
+    (typeof x?.num_episodes === 'number' ? x.num_episodes : null) ??
+    0;
+
+  // Some endpoints may not provide synopsis; Spotlight will fallback gracefully if empty.
+  const synopsis =
+    x?.synopsis ||
+    x?.background ||
+    '';
 
   return {
-    id: `mal:${String(malId)}`,       // IMPORTANT: mark as external
+    id: `mal:${String(malId)}`,       // IMPORTANT: external key
+    malId: String(malId),
+
     title: x?.title || '',
     image: img,
+    imageSource: 'mal',
+
     malScore: x?.score ?? x?.mean ?? null,
     subtitle: typeStr,
-    seasons: seasonStr ? [{ season: seasonStr, format: typeStr }] : [],
+
+    genres,
+    synopsis,
+
+    seasons: [{
+      season: seasonStr,
+      format: typeStr,
+      episodes: Number(episodes) || 0,
+      duration: ''
+    }],
+
     isFavorite: false
   };
 }
+
 
 // Load 30 recommendations for EMPTY state:
 // 10 most popular, 10 currently airing, 10 upcoming
@@ -2215,7 +2248,9 @@ const genreText = String(a.genres || '')
   .slice(0, 3)
   .join(', ');
 
+// spotlight meta: Format • Genre(s) • Episodes/Duration
 const metaParts = [
+  formatDisplay || null,
   genreText || null,
   tail || null
 ].filter(Boolean);
@@ -5734,16 +5769,24 @@ function renderStatisticsPage(){
 function openEntryDetails(id, from){
   if (id == null) return;
 
+  // If this is an external MAL entry key like "mal:12345", always open via MAL loader
+  const sid = String(id);
+  if (sid.startsWith('mal:')) {
+    const malId = sid.slice(4);
+    // keep origin for back button
+    window.__entryDetailsFrom = from || window.__entryDetailsFrom || 'home';
+    openEntryDetailsMAL(malId);
+    return;
+  }
+
   // Track where EntryDetails was opened from (only set when explicitly provided)
-  // from: 'home' | 'list'
-  if (from === 'home' || from === 'list') {
+  // from: 'home' | 'list' | 'browse'
+  if (from === 'home' || from === 'list' || from === 'browse') {
     window.__entryDetailsFrom = from;
   } else if (!window.__entryDetailsFrom) {
-    // safe default
     window.__entryDetailsFrom = 'home';
   }
 
-  const sid = String(id);
   window.__entryDetailsId = sid;
 
   const target = `#entrydetails?id=${encodeURIComponent(sid)}`;
@@ -5753,6 +5796,7 @@ function openEntryDetails(id, from){
     location.hash = target;
   }
 }
+
 
 
 function renderEntryDetailsPage(){
@@ -6688,7 +6732,13 @@ async function openEntryDetailsMAL(malId) {
   location.hash = `#entrydetails?id=${encodeURIComponent(window.__entryDetailsId)}`;
 
   try {
-    const full = await fetchAnimeById(malId, { signal: __browseAbort.signal });
+    const res = await fetch(
+  malApiUrl(`/api/anime/${encodeURIComponent(malId)}`),
+  { signal: __browseAbort.signal }
+);
+if (!res.ok) throw new Error(`MAL details failed: ${res.status}`);
+const full = (await res.json())?.data;
+if (!full) throw new Error('MAL details missing data payload');
     const mapped = mapMalToEntryDetailsModel(full);
 
     // ✅ Cache a Jikan-like object into BrowseMetaDB so your existing DB logic keeps working
@@ -6777,6 +6827,29 @@ async function openEntryDetailsMAL(malId) {
     console.error(err);
   }
 }
+
+// Spotlight: Show Details -> always go to #entrydetails with correct data
+spotlightDetailBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+  const id = __spotlightIds?.[__spotlightIndex];
+  if (!id) return;
+  openEntryDetails(id, 'home'); // openEntryDetails now routes mal: correctly too
+});
+
+// Spotlight prev/next
+spotlightNextBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!__spotlightIds?.length) return;
+  __spotlightIndex = (__spotlightIndex + 1) % __spotlightIds.length;
+  updateSpotlightUI({}, { direction: 'left' });
+});
+
+spotlightPrevBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (!__spotlightIds?.length) return;
+  __spotlightIndex = (__spotlightIndex - 1 + __spotlightIds.length) % __spotlightIds.length;
+  updateSpotlightUI({}, { direction: 'right' });
+});
 
 
 // small safe helper
