@@ -2941,10 +2941,33 @@ const MAL_AUTO_SYNC = {
   delayBetweenRequestsMs: 900      // small delay to keep Jikan happy
 };
 
-async function jikanFetchFullById(malId) {
+async function malFetchFullById(malId) {
   if (!malId) return null;
 
-  const url = malApiUrl(`/api/anime/${encodeURIComponent(malId)}`);
+  // IMPORTANT: MAL only returns extra fields if you ask for them.
+  const fields = [
+    'id',
+    'title',
+    'alternative_titles',
+    'main_picture',
+    'synopsis',
+    'mean',
+    'status',
+    'start_date',
+    'end_date',
+    'broadcast',
+    'source',
+    'average_episode_duration',
+    'rating',
+    'studios',
+    'producers',
+    'licensors'
+  ].join(',');
+
+  const url = malApiUrl(
+    `/api/anime/${encodeURIComponent(malId)}?fields=${encodeURIComponent(fields)}`
+  );
+
   const res = await fetch(url);
 
   if (res.status === 404) return null;
@@ -2961,18 +2984,25 @@ async function jikanFetchFullById(malId) {
   const d = json?.data || null;
   if (!d) return null;
 
+  // Keep your existing shape that the rest of the app expects
   const base = malNodeToJikanLike(d) || {};
+
+  const dur = formatDurationSeconds(d?.average_episode_duration);
+  const airedStr = `${d?.start_date || ''}${d?.end_date ? ` to ${d.end_date}` : ''}`.trim();
+
   return {
     ...base,
     synopsis: d?.synopsis || '',
     score: d?.mean ?? null,
     status: d?.status || '',
     studios: Array.isArray(d?.studios) ? d.studios.map(s => ({ name: s?.name || '' })) : [],
-    producers: [],
-    licensors: [],
-    broadcast: { string: '' },
-    aired: { string: `${d?.start_date || ''}${d?.end_date ? ` to ${d.end_date}` : ''}`.trim() },
-    duration: ''
+    producers: Array.isArray(d?.producers) ? d.producers.map(p => ({ name: p?.name || '' })) : [],
+    licensors: Array.isArray(d?.licensors) ? d.licensors.map(l => ({ name: l?.name || '' })) : [],
+    broadcast: { string: d?.broadcast?.string || '' },
+    aired: { string: airedStr },
+    duration: dur || '',
+    source: d?.source || '',
+    rating: d?.rating || ''
   };
 }
 
@@ -3213,14 +3243,18 @@ function applyMALDiff(entry, item) {
     changed = true;
   }
 
-  setInfo('status', item.status || '');
-  setInfo('aired', item.aired?.string || '');
-  setInfo('broadcast', item.broadcast?.string || '');
-  setInfo('producers', joinNames(item.producers));
-  setInfo('licensors', joinNames(item.licensors));
-  setInfo('studios', joinNames(item.studios));
-  setInfo('source', item.source || '');
-  setInfo('ageRating', item.rating || '');
+ setInfo('status', item.status || '');
+setInfo('aired', item.aired?.string || '');
+setInfo('broadcast', item.broadcast?.string || '');
+setInfo('producers', joinNames(item.producers));
+setInfo('licensors', joinNames(item.licensors));
+setInfo('studios', joinNames(item.studios));
+setInfo('source', item.source || '');
+setInfo('ageRating', item.rating || '');
+
+// NEW: duration used by EntryDetails ("Duration (per ep.)")
+setInfo('duration', item.duration || '');
+
 
   return changed;
 }
@@ -3238,7 +3272,7 @@ function applyMALDiff(entry, item) {
 async function syncEntryByMalId(entry) {
   if (!entry || !entry.malId) return false;
 
-  const item = await jikanFetchFullById(entry.malId);
+  const item = await malFetchFullById(entry.malId);
   if (!item) return false;
 
   return applyMALDiff(entry, item);
@@ -4998,7 +5032,19 @@ async function handleFillByMAL() {
 
   try {
     // Exact fetch by ID (no ambiguous search)
-    const res = await fetch(malApiUrl(`/api/anime/${malId}`));
+    const fields = [
+  'id','title','main_picture','alternative_titles','synopsis',
+  'mean','media_type','status',
+  'start_date','end_date','start_season',
+  'num_episodes','average_episode_duration',
+  'broadcast','studios','genres',
+  'producers','licensors',
+  'source','rating'
+].join(',');
+
+const res = await fetch(
+  malApiUrl(`/api/anime/${malId}?fields=${encodeURIComponent(fields)}`)
+);
 
     if (!res.ok) throw new Error(`Jikan error ${res.status}`);
     const item = (await res.json())?.data;
@@ -6077,14 +6123,13 @@ try {
   setTextAny(['entryDetailsInfoEnglish',   'detailInfoEnglish'  ], mi.englishTitle  || a.englishTitle  || a.titleEnglish  || a.altTitles?.en);
   const rawStatus = (mi.status || a.airingStatus || a.status || '');
 setTextAny(['entryDetailsInfoStatus', 'detailInfoStatus'], prettyAiringStatus(rawStatus));
- setTextAny(['entryDetailsInfoAired',     'detailInfoAired'    ], mi.aired     || a.aired     || 'N/A');
-setTextAny(['entryDetailsInfoBroadcast', 'detailInfoBroadcast'], mi.broadcast || a.broadcast || 'N/A');
-setTextAny(['entryDetailsInfoProducers', 'detailInfoProducers'], mi.producers || a.producers || 'N/A');
-setTextAny(['entryDetailsInfoLicensors', 'detailInfoLicensors'], mi.licensors || a.licensors || 'N/A');
-setTextAny(['entryDetailsInfoStudios',   'detailInfoStudios'  ], mi.studios   || a.studios || a.studio || 'N/A');
-setTextAny(['entryDetailsInfoSource',    'detailInfoSource'   ], mi.source    || a.source    || 'N/A');
-setTextAny(['entryDetailsInfoAgeRating', 'detailInfoAgeRating'], mi.ageRating || a.ageRating || a.rating || 'N/A');
-
+  setTextAny(['entryDetailsInfoAired',     'detailInfoAired'    ], mi.aired         || a.aired);
+  setTextAny(['entryDetailsInfoBroadcast', 'detailInfoBroadcast'], mi.broadcast     || a.broadcast);
+  setTextAny(['entryDetailsInfoProducers', 'detailInfoProducers'], mi.producers     || a.producers);
+  setTextAny(['entryDetailsInfoLicensors', 'detailInfoLicensors'], mi.licensors     || a.licensors);
+  setTextAny(['entryDetailsInfoStudios',   'detailInfoStudios'  ], mi.studios       || a.studios || a.studio);
+  setTextAny(['entryDetailsInfoSource',    'detailInfoSource'   ], mi.source        || a.source);
+  setTextAny(['entryDetailsInfoAgeRating', 'detailInfoAgeRating'], mi.ageRating     || a.ageRating || a.rating);
 
   // --- Relations (support page + legacy modal IDs) ---
   const relPanel =
@@ -6662,8 +6707,7 @@ function renderBrowseResults(items) {
   // Remove duplicates by MAL id
   items = dedupeByMalId(items);
 
-  // Store ALL shown metadata into the local per-user DB
-  upsertBrowseMetaItems(items, 'search:render');
+
 
   const cards = (items || []).map(it => {
     const title =
@@ -6738,7 +6782,151 @@ async function runBrowseSearch(q) {
 
 
 
+function mapMalToEntryDetailsModel(d) {
+  if (!d) return null;
 
+  // ---- helpers (kept local so you don’t need to hunt other parts of the file) ----
+  const monthName = (m) => ([
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December'
+  ][m] || '');
+
+  const ordinal = (n) => {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return '';
+    const mod100 = x % 100;
+    if (mod100 >= 11 && mod100 <= 13) return `${x}th`;
+    const mod10 = x % 10;
+    if (mod10 === 1) return `${x}st`;
+    if (mod10 === 2) return `${x}nd`;
+    if (mod10 === 3) return `${x}rd`;
+    return `${x}th`;
+  };
+
+  const formatPrettyDate = (iso) => {
+    if (!iso) return '';
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return String(iso); // fallback if MAL gives weird strings
+    const day = ordinal(dt.getUTCDate());
+    const mon = monthName(dt.getUTCMonth());
+    const year = dt.getUTCFullYear();
+    return `${day} ${mon}, ${year}`;
+  };
+
+  const formatPrettyDateRange = (startIso, endIso) => {
+    const a = formatPrettyDate(startIso);
+    const b = formatPrettyDate(endIso);
+    if (a && b) return a === b ? a : `${a} to ${b}`;
+    return a || b || '';
+  };
+
+  const capFirst = (s) => String(s || '').replace(/^\w/, c => c.toUpperCase());
+
+  const formatBroadcastMAL = (b) => {
+    if (!b) return '';
+    // MAL v2 usually returns: { day_of_week: "sunday", start_time: "17:00" }
+    if (typeof b === 'object') {
+      const day = b.day_of_week ? capFirst(String(b.day_of_week).toLowerCase()) : '';
+      const time = b.start_time ? String(b.start_time) : '';
+      const tz = b.timezone ? String(b.timezone) : '';
+      const out = [day, time && `at ${time}`, tz && `(${tz})`].filter(Boolean).join(' ');
+      return out || '';
+    }
+    if (typeof b === 'string') return b;
+    return '';
+  };
+
+  const prettyRating = (raw) => {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const map = {
+      g: 'G',
+      pg: 'PG',
+      pg_13: 'PG-13',
+      r: 'R',
+      r_plus: 'R+',
+      rx: 'Rx'
+    };
+    const k = s.toLowerCase();
+    if (map[k]) return map[k];
+    return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  // ---- data extraction ----
+  const img = d?.main_picture?.large || d?.main_picture?.medium || '';
+
+  const genres = Array.isArray(d?.genres) ? d.genres.map(g => g?.name).filter(Boolean) : [];
+  const studios = Array.isArray(d?.studios) ? d.studios.map(s => s?.name).filter(Boolean) : [];
+
+  const premiered = inferPremieredTimelineFromMAL(d);
+
+  const durationStr =
+    formatDurationSeconds(d?.average_episode_duration) ||
+    (d?.episode_duration ? formatDurationSeconds(d.episode_duration) : '') ||
+    (typeof d?.duration === 'string' ? d.duration : '') ||
+    '';
+
+  const airedTxt = formatPrettyDateRange(d?.start_date, d?.end_date);
+
+  const broadcastStr = formatBroadcastMAL(d?.broadcast);
+
+  const producersStr =
+    Array.isArray(d?.producers) ? d.producers.map(x => x?.name).filter(Boolean).join(', ') : '';
+
+  const licensorsStr =
+    Array.isArray(d?.licensors) ? d.licensors.map(x => x?.name).filter(Boolean).join(', ') : '';
+
+  const sourceStr = String(d?.source || '');
+  const ratingStr = prettyRating(d?.rating);
+
+  const rawStatus = d?.status || '';
+
+  return {
+    id: `mal:${String(d?.id || '')}`,
+
+    title: d?.alternative_titles?.en || d?.title || d?.alternative_titles?.ja || 'Untitled',
+    image: img,
+    description: d?.synopsis || '',
+
+    type: (d?.media_type || '').toUpperCase(),
+    genres,
+    themes: [],
+
+malScore: (typeof d?.mean === 'number') ? d.mean : null,
+premieredTimeline: premiered || '',
+duration: durationStr || '',
+aired: airedTxt,
+
+
+
+    // ✅ sidebar fields (EntryDetails reads these)
+   malInfo: {
+  japaneseTitle: d?.alternative_titles?.ja || '',
+  englishTitle: d?.alternative_titles?.en || '',
+  premiered: premiered || '',
+  duration: durationStr || '',
+  status: prettyAiringStatus(status),
+  aired: airedTxt,
+  broadcast: broadcastStr || 'N/A',
+  producers: producersStr || 'N/A',
+  licensors: licensorsStr || 'N/A',
+  studios: studios.join(', ') || 'N/A',
+  source: sourceStr || 'N/A',
+  ageRating: ratingStr || 'N/A'
+},
+
+
+    // ✅ stats row reads seasons[0].*
+    seasons: [{
+      season: premiered || '',
+      episodes: (typeof d?.num_episodes === 'number') ? d.num_episodes : 0,
+      duration: durationStr || '',
+      format: (d?.media_type || '').toUpperCase()
+    }],
+
+    currentlyAiring: String(rawStatus).toLowerCase() === 'currently_airing'
+  };
+}
 
 
 
@@ -6746,7 +6934,7 @@ async function runBrowseSearch(q) {
 async function openEntryDetailsMAL(malId) {
   if (!malId) return;
 
-  // cancel any previous browse request (reuse the same abort if present)
+  // cancel any previous details request
   try { __browseAbort?.abort(); } catch {}
   __browseAbort = new AbortController();
 
@@ -6758,95 +6946,13 @@ async function openEntryDetailsMAL(malId) {
   location.hash = `#entrydetails?id=${encodeURIComponent(window.__entryDetailsId)}`;
 
   try {
-    const res = await fetch(
-  malApiUrl(`/api/anime/${encodeURIComponent(malId)}`),
-  { signal: __browseAbort.signal }
-);
-if (!res.ok) throw new Error(`MAL details failed: ${res.status}`);
-const full = (await res.json())?.data;
-if (!full) throw new Error('MAL details missing data payload');
+    const full = await fetchAnimeById(malId, { signal: __browseAbort.signal });
+    if (!full) throw new Error('MAL details missing data payload');
+
     const mapped = mapMalToEntryDetailsModel(full);
 
-    // ✅ Cache a Jikan-like object into BrowseMetaDB so your existing DB logic keeps working
-    const cacheItem = {
-      mal_id: full?.id,
-      title: full?.title || '',
-      title_english: full?.alternative_titles?.en || '',
-      title_japanese: full?.alternative_titles?.ja || '',
-      type: (full?.media_type || '').toUpperCase() || 'TV',
-      genres: Array.isArray(full?.genres) ? full.genres.map(g => ({ name: g.name })) : [],
-      images: {
-        jpg: {
-          image_url: full?.main_picture?.medium || '',
-          large_image_url: full?.main_picture?.large || full?.main_picture?.medium || ''
-        }
-      }
-    };
-
-    try { upsertBrowseMetaItems([cacheItem], 'details:click'); } catch {}
-
-
-    // ✅ 2) Cache FULL details into UserDatabase so next open is instant
-    // (and it will never duplicate because key = mal:<id>)
-    try {
-      const key = makeEntryKey(String(malId));
-
-      const dbEntry = {
-  key,
-  malId: String(malId),
-  title: mapped?.title ?? '',
-  subtitle: '',
-
-  // your UserDatabase uses strings for these fields
-  genres: Array.isArray(mapped?.genres) ? mapped.genres.join(' - ') : '',
-  themes: Array.isArray(mapped?.themes) ? mapped.themes.join(' - ') : '',
-
-  synopsis: mapped?.description ?? '',
-  malScore: mapped?.malScore ?? null,
-
-  // ✅ persist stat + timeline fields so EntryDetails always has them after refresh
-  premieredTimeline: mapped?.premieredTimeline || mapped?.seasons?.[0]?.season || '',
-  duration: mapped?.duration || mapped?.seasons?.[0]?.duration || '',
-  aired: mapped?.aired || '',
-
-  // ✅ persist seasons so stats row is always populated
-  seasons: Array.isArray(mapped?.seasons) ? mapped.seasons : [],
-
-  // keep the richer MAL info object
-  malInfo: mapped?.malInfo ?? null,
-
-  // cover image for instant render
-  image: mapped?.image ?? null,
-  imageSource: 'mal'
-};
-
-
-      // Load existing DB from storage (don't rely on saveToLocalStorage rebuild)
-      let db = null;
-      try { db = JSON.parse(localStorage.getItem(LS_DB_KEY) || 'null'); } catch {}
-
-      if (!db || typeof db !== 'object') db = { version: 1, updatedAt: Date.now(), entries: {} };
-      if (!db.entries || typeof db.entries !== 'object') db.entries = {};
-
-      db.entries[key] = { ...(db.entries[key] || {}), ...dbEntry };
-      db.updatedAt = Date.now();
-
-      // Update in-memory copy too (if present)
-      try {
-        if (!UserDatabase || typeof UserDatabase !== 'object') UserDatabase = db;
-        if (!UserDatabase.entries || typeof UserDatabase.entries !== 'object') UserDatabase.entries = {};
-        UserDatabase.entries[key] = db.entries[key];
-        UserDatabase.updatedAt = db.updatedAt;
-      } catch {}
-
-      localStorage.setItem(LS_DB_KEY, JSON.stringify(db));
-    } catch (e) {
-      console.warn('UserDatabase cache (details) failed:', e);
-    }
-
-    // render details using the mapped model
+    // ✅ MAL-only: just render; no DB writes at all
     window.__entryDetailsExternal = mapped;
-
 
     // If still on the same entrydetails id, render now
     const raw = location.hash || '';
@@ -6862,6 +6968,158 @@ if (!full) throw new Error('MAL details missing data payload');
     console.error(err);
   }
 }
+
+
+// ============================
+// MAL-only EntryDetails Loader
+// ============================
+function _cleanLabel(s) {
+  s = String(s || '').trim();
+  if (!s) return '';
+  return s.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function _statusLabel(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  if (!s) return '';
+  if (s === 'not_yet_aired' || s === 'not_aired_yet') return 'Not aired yet';
+  if (s === 'currently_airing') return 'Currently airing';
+  if (s === 'finished_airing') return 'Finished airing';
+  return _cleanLabel(s);
+}
+
+function _minsFromSeconds(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const mins = Math.round(n / 60);
+  return mins ? `${mins} min` : '';
+}
+
+function _formatBroadcast(b) {
+  if (!b) return '';
+  // MAL may return broadcast as object {day_of_week, start_time} OR as a string (depending on your worker)
+  if (typeof b === 'string') return b.trim();
+  const day = b.day_of_week ? _cleanLabel(b.day_of_week) : '';
+  const time = b.start_time ? String(b.start_time).trim() : '';
+  if (day && time) return `${day}s at ${time}`;
+  if (day) return `${day}s`;
+  return '';
+}
+
+function _inferPremiered(d) {
+  // Prefer MAL start_season if present
+  if (d?.start_season?.season && d?.start_season?.year) {
+    return `${_cleanLabel(d.start_season.season)} ${d.start_season.year}`;
+  }
+  // Fallback: infer from start_date month
+  const iso = String(d?.start_date || '').slice(0, 10);
+  const m = iso.match(/^(\d{4})-(\d{2})-/);
+  if (!m) return '';
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  let season = 'Winter';
+  if (month >= 4 && month <= 6) season = 'Spring';
+  else if (month >= 7 && month <= 9) season = 'Summer';
+  else if (month >= 10 && month <= 12) season = 'Fall';
+  return `${season} ${year}`;
+}
+
+// MAL v2 fetch (expects your malApiUrl worker to proxy MAL)
+async function fetchAnimeById(malId, { signal } = {}) {
+  const fields = [
+    'id','title','main_picture','alternative_titles','synopsis',
+    'mean','media_type','status',
+    'start_date','end_date','start_season',
+    'num_episodes','average_episode_duration',
+    'broadcast','studios','genres',
+    'producers','licensors',
+    'source','rating'
+  ].join(',');
+
+  const url = malApiUrl(`/api/anime/${encodeURIComponent(malId)}?fields=${encodeURIComponent(fields)}`);
+  const res = await fetch(url, { signal });
+
+  if (!res.ok) throw new Error(`MAL details failed: ${res.status}`);
+  const json = await res.json();
+  return json?.data || null;
+}
+
+// Replace your mapper with a MAL-only mapper that actually populates the fields.
+function mapMalToEntryDetailsModel(d) {
+  if (!d) return null;
+
+  const img = d?.main_picture?.large || d?.main_picture?.medium || '';
+
+  const genres = Array.isArray(d?.genres) ? d.genres.map(g => g?.name).filter(Boolean) : [];
+  const studiosArr = Array.isArray(d?.studios) ? d.studios.map(s => s?.name).filter(Boolean) : [];
+  const studios = studiosArr.join(', ');
+
+  const airedTxt =
+    (d?.start_date || d?.end_date)
+      ? `${d?.start_date || ''}${d?.end_date ? ` to ${d.end_date}` : ''}`.trim()
+      : '';
+
+  const premiered = _inferPremiered(d);
+
+  const duration = _minsFromSeconds(d?.average_episode_duration) || '';
+
+  const broadcast =
+    _formatBroadcast(d?.broadcast) ||
+    (typeof d?.broadcast?.string === 'string' ? d.broadcast.string : '') ||
+    '';
+
+  const joinNames = (arr) =>
+    Array.isArray(arr) ? arr.map(x => x?.name).filter(Boolean).join(', ') : '';
+
+  const producers = joinNames(d?.producers);
+  const licensors = joinNames(d?.licensors);
+
+  const source = String(d?.source || '').trim();
+  const rating = String(d?.rating || '').trim();
+
+  const statusLabel = _statusLabel(d?.status);
+
+  return {
+    id: `mal:${String(d?.id || '')}`,
+
+    title: d?.alternative_titles?.en || d?.title || d?.alternative_titles?.ja || 'Untitled',
+    image: img,
+    description: d?.synopsis || '',
+
+    type: (d?.media_type || '').toUpperCase(),
+    genres,
+    themes: [],
+
+    premieredTimeline: premiered,
+    malScore: (typeof d?.mean === 'number') ? d.mean : null,
+    duration,
+    aired: airedTxt,
+
+    malInfo: {
+      japaneseTitle: d?.alternative_titles?.ja || '',
+      englishTitle: d?.alternative_titles?.en || '',
+      status: statusLabel,
+      aired: airedTxt,
+      broadcast,
+      producers,
+      licensors,
+      studios,
+      source,
+      ageRating: rating,
+      duration
+    },
+
+    seasons: [{
+      season: premiered,
+      episodes: (typeof d?.num_episodes === 'number') ? d.num_episodes : 0,
+      duration,
+      format: (d?.media_type || '').toUpperCase()
+    }],
+
+    currentlyAiring: String(d?.status || '').toLowerCase() === 'currently_airing'
+  };
+}
+
 
 // Spotlight: Show Details -> always go to #entrydetails with correct data
 spotlightDetailBtn?.addEventListener('click', (e) => {
