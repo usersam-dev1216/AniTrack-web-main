@@ -6395,18 +6395,20 @@ try {
 
   page.classList.toggle('has-bg', !!cover);
 
-  page.style.backgroundImage    = cover ? `url("${cover}")` : '';
-  page.style.backgroundSize     = 'cover';
-  page.style.backgroundPosition = 'center';
-  page.style.backgroundRepeat   = 'no-repeat';
-
+  // BODY draws the entry cover background (blur + overlay in CSS)
   if (cover && cover.trim()) {
-    page.setAttribute('data-bg-blur', '1');
-    page.style.setProperty('--default-bg-blur', `${DefaultBackground.blurPx}px`);
+    document.body.setAttribute('data-entrydetails-bg', '1');
+    document.body.style.setProperty('--entrydetails-bg', `url("${cover}")`);
   } else {
-    page.removeAttribute('data-bg-blur');
-    page.style.removeProperty('--default-bg-blur');
+    document.body.removeAttribute('data-entrydetails-bg');
+    document.body.style.removeProperty('--entrydetails-bg');
   }
+
+  // Keep the page container itself transparent
+  page.style.backgroundImage = '';
+  page.removeAttribute('data-bg-blur');
+  page.style.removeProperty('--default-bg-blur');
+
 } catch (err) {
   console.warn('EntryDetails background skipped:', err);
 }
@@ -7935,6 +7937,12 @@ function applyRoute(){
   document.body.classList.toggle('route-userlogin', isUserLogin);
   document.body.classList.toggle('route-account', isAccount);
   document.body.classList.toggle('route-profile', isProfile);
+
+  // If leaving EntryDetails, clear the body cover background
+  if (!isEntryDetails) {
+    document.body.removeAttribute('data-entrydetails-bg');
+    document.body.style.removeProperty('--entrydetails-bg');
+  }
 
   // render correct view content on navigation
   if (isHome) {

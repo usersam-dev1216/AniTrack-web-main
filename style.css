@@ -56,6 +56,33 @@ body::before, body::after {
   transform: translateZ(0);
 }
 
+/* EntryDetails: body-level cover background (blur + black overlay) */
+body.route-entrydetails[data-entrydetails-bg="1"]::before {
+  inset: -22px;
+  background-image: var(--entrydetails-bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(22px);
+  opacity: 1;
+  transform: scale(1.08) translateZ(0);
+  z-index: -2;
+}
+
+body.route-entrydetails[data-entrydetails-bg="1"]::after {
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0,0,0,.75) 0%,
+    rgba(0,0,0,.92) 55%,
+    rgba(0,0,0,.98) 100%
+  );
+  filter: none;
+  opacity: 1;
+  transform: translateZ(0);
+  z-index: -1;
+}
+
 
 /* Sidebar bottom auth (Login | Sign up) */
 .sidebar {
@@ -1331,17 +1358,12 @@ body.route-list .list-add-pill{
 }
 
 
-/* Ensure the blur overlay works on BOTH:
-   - Detail Modal (.detail-modal .modal-content)
-   - EntryDetails page (#entryDetailsPage)
-*/
-.detail-modal .modal-content,
-#entryDetailsPage {
+/* Ensure the blur overlay works on Detail Modal (.detail-modal .modal-content) */
+.detail-modal .modal-content {
   position: relative; /* needed so ::before overlays correctly */
 }
 
-.detail-modal .modal-content[data-bg-blur="1"]::before,
-#entryDetailsPage[data-bg-blur="1"]::before {
+.detail-modal .modal-content[data-bg-blur="1"]::before {
   content: "";
   position: absolute;
   inset: -18px;               /* prevents blur edge clipping */
@@ -4674,21 +4696,16 @@ body.route-list header{
   background: transparent;
 }
 
-/* Page container: default solid BG (no dynamic background image) */
+/* Page container: let BODY handle the cover background */
 .entrydetails-page {
   position: relative;
   width: 100%;
-  min-height: 100vh;
-  overflow: auto;
-overflow: hidden;
-  background-color: #0f0f14 !important;
-  background-image: none !important;
-  background-repeat: no-repeat !important;
-  background-size: cover !important;
-  background-position: center center !important;
+  min-height: calc(100vh - 72px);
+  overflow: hidden;
+  background: transparent;
 }
 
-/* Disable the old dark overlay layer entirely */
+/* Disable any page overlay (body draws the overlay instead) */
 .entrydetails-page.has-bg::after {
   display: none !important;
   content: none !important;
