@@ -19,6 +19,84 @@ function malApiUrl(path) {
   return `${MAL_API_BASE}${path}`;
 }
 
+/* --- MAL score hydration for cards (fills missing scores; avoids "" -> 0.00) --- */
+var __malScorePromises = new Map();
+var __malScoreSaveTimer = null;
+
+function __scheduleSaveToLocalStorage() {
+  if (__malScoreSaveTimer) return;
+  __malScoreSaveTimer = setTimeout(() => {
+    __malScoreSaveTimer = null;
+    try { saveToLocalStorage(); } catch (_) {}
+  }, 800);
+}
+
+function __parseMalScore(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;           // <- stops "" from becoming 0
+  const n = Number(s);
+  return (Number.isFinite(n) && n > 0) ? n : null;
+}
+
+function __bestMalScoreFromAnime(anime) {
+  return (
+    __parseMalScore(anime?.malScore) ??
+    __parseMalScore(anime?.malInfo?.mean) ??
+    __parseMalScore(anime?.malInfo?.mean_score) ??
+    __parseMalScore(anime?.malInfo?.score) ??
+    __parseMalScore(anime?.malInfo?.node?.mean) ??
+    __parseMalScore(anime?.malInfo?.node?.score) ??
+    __parseMalScore(anime?.__malRaw?.mean) ??
+    __parseMalScore(anime?.__malRaw?.mean_score) ??
+    __parseMalScore(anime?.__malRaw?.score) ??
+    __parseMalScore(anime?.mean) ??
+    __parseMalScore(anime?.score) ??
+    null
+  );
+}
+
+function __ensureMalScoreForPill(anime, pillEl) {
+  if (!anime || !pillEl) return;
+
+  // If we already have a real score, render + normalize to anime.malScore
+  const existing = __bestMalScoreFromAnime(anime);
+  if (existing != null) {
+    pillEl.textContent = existing.toFixed(2);
+    if (__parseMalScore(anime.malScore) == null || Number(anime.malScore) !== existing) {
+      anime.malScore = existing;
+      __scheduleSaveToLocalStorage();
+    }
+    return;
+  }
+
+  // Otherwise fetch mean from MAL (via your worker), once per malId
+  const malId = String(anime?.malId ?? anime?.mal_id ?? '').trim();
+  if (!malId) {
+    pillEl.textContent = 'N/A';
+    return;
+  }
+
+  pillEl.textContent = '…'; // loading placeholder
+
+  let p = __malScorePromises.get(malId);
+  if (!p) {
+    p = fetch(malApiUrl(`/api/anime/${encodeURIComponent(malId)}?fields=mean`))
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => __parseMalScore(j?.data?.mean))
+      .catch(() => null);
+    __malScorePromises.set(malId, p);
+  }
+
+  p.then(n => {
+    if (!pillEl.isConnected) return;
+    pillEl.textContent = (n != null) ? n.toFixed(2) : 'N/A';
+    if (n != null) {
+      anime.malScore = n;
+      __scheduleSaveToLocalStorage();
+    }
+  });
+}
 
 /* ---------------------------- DOM: Main Elements -------------------------- */
 // Grid
@@ -474,7 +552,15 @@ function hydrateAnimeListFromStores() {
         })
       : merged.seasons;
 
-    return { ...merged, status: merged.status || 'Completed', seasons };
+    // normalize MAL score: allow numeric strings, but never treat "" as 0
+    const _ms = merged?.malScore;
+    const _n  = (_ms === null || _ms === undefined || String(_ms).trim() === '')
+      ? NaN
+      : Number(_ms);
+
+    const malScoreNorm = (Number.isFinite(_n) && _n > 0) ? _n : null;
+
+    return { ...merged, malScore: malScoreNorm, status: merged.status || 'Completed', seasons };
   });
 }
 
@@ -1792,10 +1878,28 @@ renderHomePage();
       .map(s => parseFloat(s.rating))
       .filter(v => Number.isFinite(v) && v > 0);
     // Always use MAL score for the card rating pill (2 decimals)
-    let ratingDisplay = 'N/A';
-    if (anime.malScore != null && !Number.isNaN(+anime.malScore)) {
-      ratingDisplay = Number(anime.malScore).toFixed(2);
-    }
+   // Always use MAL score for the card rating pill (2 decimals)
+  const malScoreRaw =
+    anime?.malScore ??
+    anime?.malInfo?.mean ??
+    anime?.malInfo?.mean_score ??
+    anime?.malInfo?.score ??
+    anime?.malInfo?.node?.mean ??
+    anime?.malInfo?.node?.score ??
+    anime?.__malRaw?.mean ??
+    anime?.__malRaw?.mean_score ??
+    anime?.__malRaw?.score ??
+    anime?.mean ??
+    anime?.score ??
+    null;
+
+  // IMPORTANT: don't let "" become 0, and never show 0.00 when score is missing
+  const malScoreStr = (malScoreRaw === null || malScoreRaw === undefined) ? '' : String(malScoreRaw).trim();
+  const malScoreNum = (malScoreStr !== '' && Number.isFinite(+malScoreStr) && (+malScoreStr > 0))
+    ? +malScoreStr
+    : null;
+
+  const ratingDisplay = (malScoreNum != null) ? malScoreNum.toFixed(2) : 'N/A';
 
     // premiered timeline (earliest valid season text)
     let premiered = 'N/A';
@@ -1867,6 +1971,7 @@ renderHomePage();
         </div>
       </div>`;
 
+    __ensureMalScoreForPill(anime, card.querySelector('.card-rating-pill'));
 
     if (isBulkMode) card.classList.toggle('bulk-selected', bulkSelected.has(String(anime.id)));
     animeGrid.appendChild(card);
@@ -1886,10 +1991,27 @@ function buildCardForHome(anime){
   const seasons = Array.isArray(anime.seasons) ? anime.seasons : [];
 
   // Always use MAL score for the card rating pill (2 decimals)
-  let ratingDisplay = 'N/A';
-  if (anime.malScore != null && !Number.isNaN(+anime.malScore)) {
-    ratingDisplay = Number(anime.malScore).toFixed(2);
-  }
+  const malScoreRaw =
+    anime?.malScore ??
+    anime?.malInfo?.mean ??
+    anime?.malInfo?.mean_score ??
+    anime?.malInfo?.score ??
+    anime?.malInfo?.node?.mean ??
+    anime?.malInfo?.node?.score ??
+    anime?.__malRaw?.mean ??
+    anime?.__malRaw?.mean_score ??
+    anime?.__malRaw?.score ??
+    anime?.mean ??
+    anime?.score ??
+    null;
+
+  // IMPORTANT: don't let "" become 0, and never show 0.00 when score is missing
+  const malScoreStr = (malScoreRaw === null || malScoreRaw === undefined) ? '' : String(malScoreRaw).trim();
+  const malScoreNum = (malScoreStr !== '' && Number.isFinite(+malScoreStr) && (+malScoreStr > 0))
+    ? +malScoreStr
+    : null;
+
+  const ratingDisplay = (malScoreNum != null) ? malScoreNum.toFixed(2) : 'N/A';
 
   // premiered timeline (earliest valid season text)
   let premiered = 'N/A';
@@ -1951,8 +2073,64 @@ ${anime.isFavorite ?
         </div>
       </div>`;
 
+  __ensureMalScoreForPill(anime, card.querySelector('.card-rating-pill'));
 
   return card;
+}
+
+/* --------------------------- Home row arrow nav --------------------------- */
+function __wireHomeRowShell(shell){
+  if (!shell || shell.__rowNavWired) return;
+  shell.__rowNavWired = true;
+
+  const row  = shell.querySelector('.home-row');
+  const prev = shell.querySelector('.home-row-nav.prev');
+  const next = shell.querySelector('.home-row-nav.next');
+  if (!row || !prev || !next) return;
+
+  const step = () => Math.max(220, Math.floor(row.clientWidth * 0.85));
+
+  prev.addEventListener('click', () => {
+    row.scrollBy({ left: -step(), behavior: 'smooth' });
+  });
+
+  next.addEventListener('click', () => {
+    row.scrollBy({ left: step(), behavior: 'smooth' });
+  });
+
+  const update = () => {
+    const max = Math.max(0, row.scrollWidth - row.clientWidth);
+    const overflow = max > 4;
+
+    shell.dataset.noOverflow = overflow ? '0' : '1';
+
+    if (!overflow) {
+      prev.disabled = true;
+      next.disabled = true;
+      return;
+    }
+
+    prev.disabled = row.scrollLeft <= 2;
+    next.disabled = row.scrollLeft >= (max - 2);
+  };
+
+  shell.__rowNavUpdate = update;
+
+  row.addEventListener('scroll', () => requestAnimationFrame(update), { passive: true });
+  window.addEventListener('resize', () => requestAnimationFrame(update));
+
+  requestAnimationFrame(update);
+}
+
+function __initHomeRowNav(){
+  document.querySelectorAll('.home-row-shell').forEach(__wireHomeRowShell);
+}
+
+function __updateHomeRowNavFor(rowEl){
+  const shell = rowEl?.closest?.('.home-row-shell');
+  if (!shell) return;
+  __wireHomeRowShell(shell);
+  shell.__rowNavUpdate?.();
 }
 
 function fillHomeRow(rowEl, list, limit = 14){
@@ -1966,10 +2144,12 @@ function fillHomeRow(rowEl, list, limit = 14){
       <h2 style="margin:8px 0 0;">Nothing here yet</h2>
       <p style="margin:6px 0 0;">Add entries to see this section populate.</p>
     </div>`;
+    __updateHomeRowNavFor(rowEl);
     return;
   }
 
   sliced.forEach(a => rowEl.appendChild(buildCardForHome(a)));
+  __updateHomeRowNavFor(rowEl);
 }
 
 // Spotlight state (kept stable between renders)
@@ -2057,7 +2237,10 @@ function malLikeToHomeEntry(x, fallbackSeasonLabel = '') {
     id: `mal:${String(malId)}`,       // IMPORTANT: external key
     malId: String(malId),
 
-    title: x?.title || '',
+    // Prefer English title when available, then fallback to default
+    title: x?.title_english || x?.titles?.find(t => t.type === 'English')?.title || x?.title || '',
+    titleEnglish: x?.title_english || x?.titles?.find(t => t.type === 'English')?.title || '',
+    titleJapanese: x?.title_japanese || x?.titles?.find(t => t.type === 'Japanese')?.title || '',
     image: img,
     imageSource: 'mal',
 
@@ -2093,9 +2276,9 @@ async function loadHomeEmptyStateRecs() {
       jikanFetchUpcoming({ limit: 50 })
     ]);
 
-    const popular10 = pickRandom(popularRaw, 10).map(x => malLikeToHomeEntry(x));
-    const airing10  = pickRandom(airingRaw, 10).map(x => malLikeToHomeEntry(x));
-    const upcoming10= pickRandom(upcomingRaw, 10).map(x => malLikeToHomeEntry(x));
+    const popular10 = pickRandom(popularRaw, 30).map(x => malLikeToHomeEntry(x));
+    const airing10  = pickRandom(airingRaw, 30).map(x => malLikeToHomeEntry(x));
+    const upcoming10= pickRandom(upcomingRaw, 30).map(x => malLikeToHomeEntry(x));
 
     // Spotlight = all 30 combined
     __homeSpotlightPool = [...popular10, ...airing10, ...upcoming10];
@@ -2353,8 +2536,22 @@ const metaParts = [
 ].filter(Boolean);
 
 
-  // title (let CSS handle wrapping; just set safely)
-  if (spotlightTitleEl) spotlightTitleEl.textContent = a.title || 'Untitled';
+  // title (English first; then fallback)
+  const spotlightTitle =
+    a?.malInfo?.englishTitle ||
+    a?.englishTitle ||
+    a?.titleEnglish ||
+    a?.title_english ||
+    a?.altTitles?.en ||
+    a?.__malRaw?.alternative_titles?.en ||
+    a?.title ||
+    a?.title_japanese ||
+    a?.titleJapanese ||
+    a?.altTitles?.ja ||
+    a?.__malRaw?.title ||
+    'Untitled';
+
+  if (spotlightTitleEl) spotlightTitleEl.textContent = spotlightTitle;
 
   // meta line
   if (spotlightMetaEl) spotlightMetaEl.textContent = metaParts.join(' • ');
@@ -3205,17 +3402,66 @@ function applyMALDiff(entry, item) {
     changed = true;
   }
 
-  // 6) Genres/Themes (fill if empty)
+  // 6) Genres/Themes (keep separated; also fixes old entries where themes got stored as genres)
   const srcGenres = item.genres ?? item.node?.genres ?? item.anime?.genres ?? [];
-  if ((!entry.genres || !entry.genres.trim()) && srcGenres.length) {
-    entry.genres = srcGenres.map(g => g.name || g.title).filter(Boolean).join(', ');
-    changed = true;
+  const srcThemes = item.themes ?? item.node?.themes ?? item.anime?.themes ?? [];
+
+  const pickNames = (arr) => Array.isArray(arr)
+    ? arr.map(x => x?.name || x?.title || '').map(s => String(s).trim()).filter(Boolean)
+    : [];
+
+  const dedupe = (arr) => {
+    const seen = new Set();
+    const out = [];
+    for (const v of arr) {
+      const k = v.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(v);
+    }
+    return out;
+  };
+
+  const splitCSV = (s) => String(s || '')
+    .split(',')
+    .map(x => String(x).trim())
+    .filter(Boolean);
+
+  const srcGenreNames = dedupe(pickNames(srcGenres));
+  const srcThemeNames = dedupe(pickNames(srcThemes));
+  const themeSet = new Set(srcThemeNames.map(s => s.toLowerCase()));
+
+  let curGenres = splitCSV(entry.genres);
+  let curThemes = splitCSV(entry.themes);
+
+  // If Jikan gives themes, remove them from genres (fixes the bug)
+  if (themeSet.size && curGenres.length) {
+    const cleaned = curGenres.filter(g => !themeSet.has(g.toLowerCase()));
+    if (cleaned.join(', ') !== curGenres.join(', ')) {
+      curGenres = cleaned;
+      entry.genres = cleaned.join(', ');
+      changed = true;
+    }
   }
 
-  const srcThemes = item.themes ?? item.node?.themes ?? item.anime?.themes ?? [];
-  if ((!entry.themes || !entry.themes.trim()) && srcThemes.length) {
-    entry.themes = srcThemes.map(t => t.name || t.title).filter(Boolean).join(', ');
-    changed = true;
+  // Merge genres from source
+  if (srcGenreNames.length) {
+    const merged = dedupe([...curGenres, ...srcGenreNames]);
+    const next = merged.join(', ');
+    if (next !== (entry.genres || '')) {
+      entry.genres = next;
+      changed = true;
+    }
+  }
+
+  // Merge themes from source
+  if (srcThemeNames.length) {
+    const merged = dedupe([...curThemes, ...srcThemeNames]);
+    const next = merged.join(', ');
+    if (next !== (entry.themes || '')) {
+      entry.themes = next;
+      changed = true;
+    }
   }
 
   // 7) Cover image (refresh if NOT manual)
@@ -5064,55 +5310,94 @@ async function handleFillByMAL() {
   pendingMalId = String(malId); // keep the link for Save
 
   try {
-    // Exact fetch by ID (no ambiguous search)
-    const fields = [
-  'id','title','main_picture','alternative_titles','synopsis',
-  'mean','media_type','status',
-  'start_date','end_date','start_season',
-  'num_episodes','average_episode_duration',
-  'broadcast','studios','genres',
-  'producers','licensors',
-  'source','rating'
-].join(',');
+    // ✅ Use worker /full so we get Jikan's separated genres + themes
+    const res = await fetch(
+      malApiUrl(`/api/anime/${encodeURIComponent(malId)}/full`)
+    );
 
-const res = await fetch(
-  malApiUrl(`/api/anime/${malId}?fields=${encodeURIComponent(fields)}`)
-);
+    if (!res.ok) throw new Error(`Worker /full error ${res.status}`);
+    const payload = await res.json();
 
-    if (!res.ok) throw new Error(`Jikan error ${res.status}`);
-    const item = (await res.json())?.data;
-    if (!item) { alert('Could not load that MAL entry.'); return; }
+    const mal   = payload?.details || null; // MAL v2 details
+    const jikan = payload?.jikan   || null; // Jikan full object (has true genres/themes)
 
-    // After fetching `item` from MAL (via Jikan), map to your form
-    const premiered = (item.season && item.year)
-      ? (item.season[0].toUpperCase() + item.season.slice(1)) + ' ' + item.year
-      : (item.aired?.string || '');
-
-    const normalizedSeason = __computeSeasonFromMAL(item, premiered);
-
-    setVal('animeTitle', item.title_english || item.title || item.title_japanese || '');
-    setVal('animeSubtitle', item.type || 'TV');
-    setVal('animeGenres', (item.genres || []).map(g => g.name).join(', '));
-    setVal('animeThemes', (item.themes || []).map(t => t.name).join(', '));
-    setVal('animeSeason', normalizedSeason || premiered);
-    setVal('animeEpisodes', item.episodes ?? '');
-    setVal('animeDuration', normalizeDuration(item.duration || ''));
-
-    // Put MAL score here (e.g., 6.45)
-    if (typeof item.score === 'number') {
-      setVal('malScore', item.score.toFixed(2));
+    if (!mal?.id && !jikan?.mal_id) {
+      alert('Could not load that MAL entry.');
+      return;
     }
 
-    // Poster → preview
-    const poster = item.images?.jpg?.large_image_url || item.images?.webp?.large_image_url || '';
+    // Season/premiered (prefer Jikan formatting)
+    const premiered = (jikan?.season && jikan?.year)
+      ? (String(jikan.season)[0].toUpperCase() + String(jikan.season).slice(1)) + ' ' + jikan.year
+      : (jikan?.aired?.string || '');
+
+    const normalizedSeason = __computeSeasonFromMAL(jikan || {}, premiered);
+
+    // Title (English first)
+    const title =
+      (mal?.alternative_titles?.en || '').trim() ||
+      (jikan?.title_english || '').trim() ||
+      (mal?.title || '').trim() ||
+      (jikan?.title || '').trim() ||
+      (mal?.alternative_titles?.ja || '').trim() ||
+      (jikan?.title_japanese || '').trim() ||
+      '';
+
+    // Type
+    const rawType = jikan?.type || mal?.media_type || 'TV';
+    let type = String(rawType).toUpperCase();
+    if (type === 'TV_SERIES') type = 'TV';
+
+    // ✅ Correct separation (Jikan)
+    const genresCsv = Array.isArray(jikan?.genres)
+      ? jikan.genres.map(g => g?.name).filter(Boolean).join(', ')
+      : '';
+
+    const themesCsv = Array.isArray(jikan?.themes)
+      ? jikan.themes.map(t => t?.name).filter(Boolean).join(', ')
+      : '';
+
+    // Episodes + duration (prefer MAL seconds, fallback Jikan string)
+    const episodes =
+      (typeof mal?.num_episodes === 'number') ? mal.num_episodes :
+      (jikan?.episodes ?? '');
+
+    const duration =
+      (typeof mal?.average_episode_duration === 'number' && mal.average_episode_duration > 0)
+        ? formatDurationSeconds(mal.average_episode_duration)
+        : normalizeDuration(jikan?.duration || '');
+
+    setVal('animeTitle', title);
+    setVal('animeSubtitle', type || 'TV');
+    setVal('animeGenres', genresCsv);
+    setVal('animeThemes', themesCsv);
+    setVal('animeSeason', normalizedSeason || premiered);
+    setVal('animeEpisodes', episodes ?? '');
+    setVal('animeDuration', duration || '');
+
+    // Score (prefer MAL mean)
+    const score =
+      (Number.isFinite(+mal?.mean) ? +mal.mean :
+      (Number.isFinite(+jikan?.score) ? +jikan.score : null));
+
+    if (score != null) setVal('malScore', score.toFixed(2));
+
+    // Poster (prefer MAL picture)
+    const poster =
+      mal?.main_picture?.large ||
+      mal?.main_picture?.medium ||
+      jikan?.images?.jpg?.large_image_url ||
+      jikan?.images?.webp?.large_image_url ||
+      '';
+
     currentImage = poster || null;
     currentImageSource = poster ? 'mal' : currentImageSource;
+
     imagePreview.innerHTML = currentImage
       ? `<img src="${currentImage}" alt="Preview">`
       : '<i class="fas fa-image"></i>';
 
-    // Same behavior as your existing Fill by MAL button
-    showNotification?.('Filled from MAL (clipboard).');
+    showNotification?.('Filled from MAL (genres/themes fixed).');
   } catch (err) {
     console.error(err);
     alert('Could not fetch details for that link.');
@@ -6461,25 +6746,18 @@ function initBrowseSearch() {
   if (!initBrowseSearch.__boundClicks) {
     initBrowseSearch.__boundClicks = true;
 
-shell.addEventListener('click', async (e) => {
-  // If the "Add" button is clicked, do nothing (for now)
-  if (e.target.closest('.browse-add-btn')) {
-    e.preventDefault();
-    e.stopPropagation();
-    return;
+    shell.addEventListener('click', (e) => {
+      const card = e.target.closest('.browse-card');
+      if (!card) return;
+
+      const malId = card.getAttribute('data-mal-id');
+      if (!malId) return;
+
+      e.preventDefault();
+      openEntryDetailsMAL(malId);
+    });
   }
 
-  const card = e.target.closest('.browse-card');
-  if (!card) return;
-
-  const malId = card.getAttribute('data-mal-id');
-  if (!malId) return;
-
-  e.preventDefault();
-  openEntryDetailsMAL(malId);
-});
-
-  }
 
   const setClearVisible = () => {
     clear.style.display = input.value.trim() ? 'inline-flex' : 'none';
@@ -6694,10 +6972,15 @@ function renderBrowseCardHTML(it) {
     it?.images?.webp?.image_url ||
     '';
 
-  // show status ONLY if this MAL entry already exists in your list
+     // MAL score display (2 decimals) — don't show 0.00 when score is missing
+  const malScoreRaw = it?.score ?? it?.mean ?? it?.mal_score ?? it?.mean_score ?? null;
+  const malScoreStr = (malScoreRaw === null || malScoreRaw === undefined) ? '' : String(malScoreRaw).trim();
+  const malScoreNum = (malScoreStr !== '' && Number.isFinite(+malScoreStr) && (+malScoreStr > 0))
+    ? +malScoreStr
+    : null;
+  const ratingDisplay = (malScoreNum != null) ? malScoreNum.toFixed(2) : 'N/A';
+
   const malId = String(it?.mal_id || '');
-  const hit = (animeList || []).find(a => String(a?.malId || '') === malId);
-  const status = hit?.status || null;
 
   return `
     <div class="browse-card" data-mal-id="${malId}">
@@ -6712,17 +6995,17 @@ function renderBrowseCardHTML(it) {
         <div class="browse-meta">${escapeHtml(line1)}</div>
         <div class="browse-meta browse-meta-2">${escapeHtml(line2)}</div>
 
-        <div class="browse-actions">
-          ${
-            status
-              ? `<span class="status-pill" data-status="${escapeHtml(status)}">${escapeHtml(status)}</span>`
-              : `<button class="browse-add-btn" type="button" aria-label="Add to list">Add to My List ></button>`
-          }
+        <div class="browse-mal-score" aria-label="MAL score">
+          <span class="browse-mal-score-label">MAL</span>
+          <span class="browse-mal-score-value">${escapeHtml(ratingDisplay)}</span>
         </div>
       </div>
     </div>
   `;
 }
+
+
+
 
 
 
@@ -6793,6 +7076,9 @@ function malNodeToJikanLike(node) {
     genres: Array.isArray(node?.genres) ? node.genres.map(g => ({ name: g?.name || '' })) : [],
     themes: [],
 
+    // MAL score lives in "mean" when requested via fields=mean
+    score: node?.mean ?? node?.mean_score ?? node?.score ?? null,
+
     images: img
       ? {
           jpg: { large_image_url: img, image_url: img },
@@ -6821,17 +7107,23 @@ async function jikanFetchList(url, { signal } = {}) {
 }
 
 async function jikanFetchUpcoming({ limit = 12, signal } = {}) {
-  const url = malApiUrl(`/api/ranking?type=upcoming&limit=${encodeURIComponent(limit)}`);
+  const url = malApiUrl(
+    `/api/ranking?type=upcoming&limit=${encodeURIComponent(limit)}&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
+  );
   return jikanFetchList(url, { signal });
 }
 
 async function jikanFetchTopAiring({ limit = 12, signal } = {}) {
-  const url = malApiUrl(`/api/ranking?type=airing&limit=${encodeURIComponent(limit)}`);
+  const url = malApiUrl(
+    `/api/ranking?type=airing&limit=${encodeURIComponent(limit)}&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
+  );
   return jikanFetchList(url, { signal });
 }
 
 async function jikanFetchMostPopular({ limit = 12, signal } = {}) {
-  const url = malApiUrl(`/api/ranking?type=bypopularity&limit=${encodeURIComponent(limit)}`);
+  const url = malApiUrl(
+    `/api/ranking?type=bypopularity&limit=${encodeURIComponent(limit)}&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
+  );
   return jikanFetchList(url, { signal });
 }
 
@@ -6904,7 +7196,9 @@ async function runBrowseSearch(q) {
   const seq = ++__browseSeq;
   renderBrowseLoading(q);
 
-  const url = malApiUrl(`/api/search?q=${encodeURIComponent(q)}&limit=25`);
+  const url = malApiUrl(
+  `/api/search?q=${encodeURIComponent(q)}&limit=25&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
+);
   const res = await fetch(url, { signal: __browseAbort.signal });
 
   if (seq !== __browseSeq) return;
@@ -7039,7 +7333,7 @@ function mapMalToEntryDetailsModel(d) {
     genres,
     themes: [],
 
-malScore: (typeof d?.mean === 'number') ? d.mean : null,
+malScore: (Number.isFinite(+(d?.mean ?? d?.score ?? d?.mean_score))) ? +(d?.mean ?? d?.score ?? d?.mean_score) : null,
 premieredTimeline: premiered || '',
 duration: durationStr || '',
 aired: airedTxt,
@@ -7287,10 +7581,16 @@ async function openEntryDetailsMAL(malId) {
       description: mal?.synopsis || '',
 
       type: clean(mal?.media_type).toUpperCase(),
-      genres: Array.isArray(mal?.genres) ? mal.genres.map(g => g?.name).filter(Boolean) : [],
-      themes: [],
+      // ✅ Prefer Jikan (true separated genres/themes). MAL's genres include themes too.
+      genres: Array.isArray(jikan?.genres)
+        ? jikan.genres.map(g => g?.name).filter(Boolean)
+        : (Array.isArray(mal?.genres) ? mal.genres.map(g => g?.name).filter(Boolean) : []),
 
-      malScore: (typeof mal?.mean === 'number') ? mal.mean : null,
+      themes: Array.isArray(jikan?.themes)
+        ? jikan.themes.map(t => t?.name).filter(Boolean)
+        : [],
+
+      malScore: (Number.isFinite(+(mal?.mean ?? mal?.score))) ? +(mal?.mean ?? mal?.score) : null,
 
       premieredTimeline: premiered,
       duration: duration,
@@ -7512,7 +7812,7 @@ function mapMalToEntryDetailsModel(d) {
     themes: [],
 
     premieredTimeline: premiered,
-    malScore: (typeof d?.mean === 'number') ? d.mean : null,
+    malScore: (Number.isFinite(+(d?.mean ?? d?.score ?? d?.mean_score))) ? +(d?.mean ?? d?.score ?? d?.mean_score) : null,
     duration,
     aired: airedTxt,
 
@@ -7689,6 +7989,7 @@ lsViewBtn?.addEventListener('click', () => {
 function init() {
   loadFromLocalStorage();
   setupEventListeners();
+  __initHomeRowNav();
 
   syncViewModeBtn();
   syncListSidebarViewBtn();

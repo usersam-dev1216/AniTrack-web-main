@@ -388,6 +388,7 @@ background: linear-gradient(45deg, #1d1d27, rgba(255, 255, 255, 0));
 .browse-info{
   flex: 1;
   padding: 18px 14px 14px 0;
+  padding-bottom: 72px; /* reserve space for score bottom-right */
   min-width: 0;
 
   display: flex;
@@ -395,8 +396,8 @@ background: linear-gradient(45deg, #1d1d27, rgba(255, 255, 255, 0));
   justify-content: flex-start;
   height: 100%;
   position: relative;
-  padding-bottom: 48px; /* space for bottom-right pill/button */
 }
+
 
 
 .browse-meta-line1{
@@ -408,11 +409,7 @@ background: linear-gradient(45deg, #1d1d27, rgba(255, 255, 255, 0));
   opacity: .92;
 }
 
-/* status pill pinned bottom-right (only on browse cards) */
-body.route-browse .browse-card .status-pill{
-  right: 12px;
-  bottom: 12px;
-}
+
 
 
 .browse-title{
@@ -445,32 +442,40 @@ color: var(--text-secondary);
   opacity: .95;
 }
 
-.browse-actions{
+
+
+
+
+/* MAL score badge (browse cards) */
+.browse-mal-score{
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 14px;
+  bottom: 14px;
+
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 4px;
+  user-select: none;
+  white-space: nowrap;
 }
 
-.browse-add-btn{
-  display: inline-block;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(167, 139, 250, .12);
-  font-size: .85rem;
+.browse-mal-score-label{
+  font-size: .78rem;
   line-height: 1;
-  background: transparent;
-  color: var(--accent-3);
-  cursor: pointer;
-  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  opacity: .65;
+  margin-bottom: 3px;
 }
 
-.browse-add-btn:hover{
-  background: rgba(193, 158, 255, .14);
-  border-color: rgba(193, 158, 255, .35);
+.browse-mal-score-value{
+  font-size: x-large;
+  line-height: 1;
+  font-weight: 800;
+ color: rgb(180 227 255 / 92%);
 }
+
 
 
 .header-center-nav {
@@ -866,6 +871,65 @@ margin-inline: 90px;
   scroll-snap-align: start;
 }
 
+/* Home row nav arrows (prev/next) */
+.home-row-shell{
+  position: relative;
+}
+
+/* Hide arrows when row doesn't overflow (JS sets data-no-overflow="1") */
+.home-row-shell[data-no-overflow="1"] .home-row-nav{
+  display: none;
+}
+
+.home-row-nav{
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(0,0,0,.35);
+  color: #fff;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  z-index: 10;
+
+  backdrop-filter: blur(8px);
+  opacity: .9;
+  transition: opacity .15s ease, transform .15s ease, background .15s ease;
+}
+
+.home-row-nav:hover{
+  opacity: 1;
+  transform: translateY(-50%) scale(1.05);
+  background: rgba(0,0,0,.50);
+}
+
+.home-row-nav:disabled{
+  opacity: .35;
+  cursor: default;
+  transform: translateY(-50%);
+}
+
+.home-row-nav:focus-visible{
+  outline: 2px solid var(--accent-3);
+  outline-offset: 2px;
+}
+
+.home-row-nav.prev{ left: 34px; }
+.home-row-nav.next{ right: 34px; }
+
+/* Mobile users can swipe; keep UI clean */
+@media (max-width: 900px){
+  .home-row-nav{ display: none; }
+}
+
 /* ================ HEADER & NAVIGATION ================ */
 
 header {
@@ -873,10 +937,9 @@ header {
   align-items: center;
   gap: 18px;
   flex-wrap: wrap;
-  padding: 22px 22px 22px;
+  padding: 22px 62px 22px;
   background: linear-gradient(45deg, #1d1d27, rgba(255, 255, 255, 0));
   position: relative;
-padding-inline: 160px;
 
 }
 
@@ -2381,6 +2444,7 @@ body.route-list .anime-card:hover .card-overlay-bottom {
   font-size: 22px;
   font-weight: 600;
   letter-spacing: .2px;
+  color: var(--accent-3)
 }
 
 .sb-close {
