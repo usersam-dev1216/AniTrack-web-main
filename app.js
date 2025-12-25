@@ -1249,8 +1249,6 @@ function guessSeasonFromDate(dLike){
 
 
 
-
-
 function seasonKey(text = '') {
   const m = String(text).match(/\b(Winter|Spring|Summer|Fall)\s+((?:19|20)\d{2})\b/i);
   if (!m) return { y: -Infinity, o: -Infinity };
@@ -1294,8 +1292,17 @@ function inferPremieredTimelineFromMAL(d){
 function formatDurationSeconds(sec){
   const n = Number(sec);
   if (!Number.isFinite(n) || n <= 0) return '';
+
   const mins = Math.round(n / 60);
-  return mins > 0 ? `${mins} min` : '';
+  if (mins <= 0) return '';
+
+  // 23m
+  if (mins < 60) return `${mins}m`;
+
+  // 2h 10m (or 2h)
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 // --- NEW: neat status text ---
@@ -1303,11 +1310,12 @@ function prettyAiringStatus(raw){
   const s = String(raw || '').trim().toLowerCase();
   if (!s) return '';
   const map = {
-    currently_airing: 'Currently airing',
-    finished_airing: 'Finished airing',
-    not_yet_aired: 'Not aired yet',
-    not_aired_yet: 'Not aired yet'
-  };
+  currently_airing: 'Currently Airing',
+  finished_airing: 'Finished Airing',
+  not_yet_aired: 'Not Yet Aired',
+  not_aired_yet: 'Not Yet Aired'
+};
+
   if (map[s]) return map[s];
 
   // generic snake_case -> Title case
@@ -1968,6 +1976,38 @@ function fillHomeRow(rowEl, list, limit = 14){
 let __spotlightIds = [];
 let __spotlightIndex = 0;
 
+// Spotlight synopsis cache (so home spotlight can show real synopsis even when list endpoints don't include it)
+const __spotlightSynopsisCache = new Map(); // malId -> string OR Promise<string>
+
+function getNumericMalIdFromEntry(entry) {
+  const raw = entry?.malId ?? entry?.mal_id ?? entry?.id ?? '';
+  const s = String(raw);
+  if (/^\d+$/.test(s)) return s;
+  const m = s.match(/^mal:(\d+)$/);
+  return m ? m[1] : null;
+}
+
+function fetchSpotlightSynopsis(malId) {
+  const key = String(malId);
+  const existing = __spotlightSynopsisCache.get(key);
+  if (typeof existing === 'string') return Promise.resolve(existing);
+  if (existing && typeof existing.then === 'function') return existing;
+
+  const p = fetch(malApiUrl(`/api/anime/${encodeURIComponent(key)}?fields=synopsis`))
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => {
+      const syn = j?.data?.synopsis;
+      return syn ? String(syn).trim() : '';
+    })
+    .catch(() => '');
+
+  __spotlightSynopsisCache.set(key, p);
+  return p.then(s => {
+    __spotlightSynopsisCache.set(key, s || '');
+    return s || '';
+  });
+}
+
 // Home empty-state recommendations (when animeList is empty)
 let __homeSpotlightPool = [];     // the objects Spotlight should read from
 let __homeEmptyLoaded = false;    // cache flag so we don't refetch every render
@@ -2320,23 +2360,45 @@ const metaParts = [
   if (spotlightMetaEl) spotlightMetaEl.textContent = metaParts.join(' • ');
 
   // description: prefer synopsis, else genres/themes line, else fallback
-  const cleanList = (s) => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
-  const genres = cleanList(a.genres).slice(0, 4);
-  const themes = cleanList(a.themes).slice(0, 4);
+  // description: prefer synopsis; if missing, show a fallback immediately and fetch synopsis in the background
+const cleanList = (s) => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+const genres = cleanList(a.genres).slice(0, 4);
+const themes = cleanList(a.themes).slice(0, 4);
 
-  let desc = String(a.synopsis || '').trim();
-  if (!desc) {
-    const g = genres.length ? `Genres: ${genres.join(', ')}` : '';
-    const t = themes.length ? `Themes: ${themes.join(', ')}` : '';
-    desc = [g, t].filter(Boolean).join(' • ');
+const MAX = 520;
+const currentKey = String(a.id);
+
+const synopsis = String(a.synopsis || '').trim();
+const descIsSynopsis = !!synopsis;
+
+let desc = synopsis;
+if (!desc) {
+  const g = genres.length ? `Genres: ${genres.join(', ')}` : '';
+  const t = themes.length ? `Themes: ${themes.join(', ')}` : '';
+  desc = [g, t].filter(Boolean).join(' • ');
+}
+if (!desc) desc = 'No description available.';
+
+if (desc.length > MAX) desc = desc.slice(0, MAX).trimEnd() + '…';
+if (spotlightDescEl) spotlightDescEl.textContent = desc;
+
+// If we don't already have a synopsis (common on ranking/search endpoints), pull it once and update the UI.
+if (!descIsSynopsis && spotlightDescEl) {
+  const malIdNum = getNumericMalIdFromEntry(a);
+  if (malIdNum) {
+    fetchSpotlightSynopsis(malIdNum).then((syn) => {
+      if (!syn) return;
+      // cache onto the entry so next render is instant
+      a.synopsis = syn;
+      // only update if user is still looking at the same spotlight
+      if (String(homeSpotlight.dataset.id) !== currentKey) return;
+      let s = syn;
+      if (s.length > MAX) s = s.slice(0, MAX).trimEnd() + '…';
+      spotlightDescEl.textContent = s;
+    });
   }
-  if (!desc) desc = 'No description available.';
+}
 
-  // hard trim so it never explodes (CSS should still do 4-line clamp)
-  const MAX = 520;
-  if (desc.length > MAX) desc = desc.slice(0, MAX).trimEnd() + '…';
-
-  if (spotlightDescEl) spotlightDescEl.textContent = desc;
 
   // enable/disable nav if only 1
   const many = __spotlightIds.length > 1;
@@ -2941,70 +3003,41 @@ const MAL_AUTO_SYNC = {
   delayBetweenRequestsMs: 900      // small delay to keep Jikan happy
 };
 
-async function malFetchFullById(malId) {
-  if (!malId) return null;
+async function malFetch(url, env, { signal } = {}) {
+  const res = await fetch(url, {
+    signal,
+    headers: { "X-MAL-CLIENT-ID": env.MAL_CLIENT_ID },
+    cf: { cacheEverything: true, cacheTtl: 300 }
+  });
 
-  // IMPORTANT: MAL only returns extra fields if you ask for them.
-  const fields = [
-    'id',
-    'title',
-    'alternative_titles',
-    'main_picture',
-    'synopsis',
-    'mean',
-    'status',
-    'start_date',
-    'end_date',
-    'broadcast',
-    'source',
-    'average_episode_duration',
-    'rating',
-    'studios',
-    'producers',
-    'licensors'
-  ].join(',');
+  if (res.status === 429) return { error: "rate_limited", status: 429 };
+  if (res.status === 404) return { error: "not_found", status: 404 };
+  if (!res.ok) return { error: `mal_error_${res.status}`, status: res.status };
 
-  const url = malApiUrl(
-    `/api/anime/${encodeURIComponent(malId)}?fields=${encodeURIComponent(fields)}`
-  );
-
-  const res = await fetch(url);
-
-  if (res.status === 404) return null;
-
-  if (res.status === 429) {
-    const err = new Error('Rate limited by MAL API');
-    err._rateLimitHit = true;
-    throw err;
-  }
-
-  if (!res.ok) throw new Error(`MAL error ${res.status}`);
-
-  const json = await res.json();
-  const d = json?.data || null;
-  if (!d) return null;
-
-  // Keep your existing shape that the rest of the app expects
-  const base = malNodeToJikanLike(d) || {};
-
-  const dur = formatDurationSeconds(d?.average_episode_duration);
-  const airedStr = `${d?.start_date || ''}${d?.end_date ? ` to ${d.end_date}` : ''}`.trim();
-
-  return {
-    ...base,
-    synopsis: d?.synopsis || '',
-    score: d?.mean ?? null,
-    status: d?.status || '',
-    studios: Array.isArray(d?.studios) ? d.studios.map(s => ({ name: s?.name || '' })) : [],
-    producers: Array.isArray(d?.producers) ? d.producers.map(p => ({ name: p?.name || '' })) : [],
-    licensors: Array.isArray(d?.licensors) ? d.licensors.map(l => ({ name: l?.name || '' })) : [],
-    broadcast: { string: d?.broadcast?.string || '' },
-    aired: { string: airedStr },
-    duration: dur || '',
-    source: d?.source || '',
-    rating: d?.rating || ''
-  };
+  return { data: await res.json(), status: 200 };
 }
+
+// Jikan fallback (no auth)
+async function jikanFetch(url, { signal } = {}) {
+  const res = await fetch(url, {
+    signal,
+    cf: { cacheEverything: true, cacheTtl: 600 } // 10 minutes
+  });
+
+  if (res.status === 429) return { error: "rate_limited", status: 429 };
+  if (res.status === 404) return { error: "not_found", status: 404 };
+  if (!res.ok) return { error: `jikan_error_${res.status}`, status: res.status };
+
+  return { data: await res.json(), status: 200 };
+}
+
+function toNameList(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map(x => ({ id: x?.mal_id ?? x?.id ?? null, name: x?.name || x?.title || "" }))
+    .filter(x => x.name);
+}
+
 
 
 
@@ -5965,15 +5998,32 @@ document.getElementById('entryDetailsBackBtn')?.addEventListener('click', (e) =>
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[m]));
 
-  const valOrNA = (v) => {
-    if (v == null) return 'N/A';
-    if (Array.isArray(v)) {
-      const arr = v.map(x => String(x).trim()).filter(Boolean);
-      return arr.length ? arr.join(', ') : 'N/A';
-    }
-    const s = String(v).trim();
-    return s ? s : 'N/A';
-  };
+const pickText = (x) => {
+  if (x == null) return '';
+  if (typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean') return String(x);
+  if (typeof x === 'object') {
+    // common MAL/Jikan shapes: { name }, sometimes { title }, etc.
+    return String(x.name ?? x.title ?? x.value ?? x.label ?? x.text ?? '');
+  }
+  return String(x);
+};
+
+const valOrNA = (v) => {
+  if (v == null) return 'N/A';
+
+  if (Array.isArray(v)) {
+    const arr = v
+      .map(pickText)
+      .map(s => String(s).trim())
+      .filter(Boolean);
+
+    return arr.length ? arr.join(', ') : 'N/A';
+  }
+
+  const s = pickText(v).trim();
+  return s ? s : 'N/A';
+};
+
 
   const typeNorm = (t='') => {
     t = String(t||'').trim();
@@ -6050,7 +6100,7 @@ document.getElementById('entryDetailsBackBtn')?.addEventListener('click', (e) =>
   }
 
   // Synopsis
-  setText('entryDetailsSynopsis', a.description || a.synopsis || a.summary);
+  setText('entryDetailsSynopsis', valOrNA(a.description || a.synopsis || a.summary));
 
   // --- DefaultBackground (EntryDetails) ---
 const page = entryDetailsView.querySelector('.entrydetails-page') || entryDetailsView;
@@ -6112,17 +6162,97 @@ try {
     firstDuration(seasons) ||
     'N/A';
 
+  const epsTotal = Number(totalEps(seasons) || a?.__malRaw?.num_episodes || 0);
+  const typeUpper = String(a?.type || '').toUpperCase();
+  const isSingleEpisode = (epsTotal === 1) || (typeUpper === 'MOVIE');
+
+  const setStatVisibleByValueId = (valueId, visible) => {
+    const v = document.getElementById(valueId);
+    if (!v) return;
+    const stat = v.closest('.detail-stat');
+    if (stat) stat.style.display = visible ? '' : 'none';
+  };
+
+  const setStatLabelByValueId = (valueId, labelText) => {
+    const v = document.getElementById(valueId);
+    if (!v) return;
+    const stat = v.closest('.detail-stat');
+    const label = stat?.querySelector('.detail-stat-label');
+    if (label) label.textContent = labelText;
+  };
+
+  const minutesFromDurationString = (s) => {
+    const str = String(s || '').toLowerCase();
+
+    // "2 hr. 10 min." / "2 hr 10 min"
+    let h = 0, m = 0;
+
+    const mh = str.match(/(\d+)\s*(h|hr|hrs|hour|hours)\b/);
+    if (mh) h = parseInt(mh[1], 10);
+
+    const mm = str.match(/(\d+)\s*(m|min|mins|minute|minutes)\b/);
+    if (mm) m = parseInt(mm[1], 10);
+
+    // "130 min"
+    if (!mh && mm) return m;
+
+    const total = h * 60 + m;
+    return total > 0 ? total : null;
+  };
+
+  const formatRuntime = (mins) => {
+    const n = Number(mins);
+    if (!Number.isFinite(n) || n <= 0) return '';
+    if (n >= 60) {
+      const hh = Math.floor(n / 60);
+      const mm = n % 60;
+      return mm ? `${hh}h ${mm}m` : `${hh}h`;
+    }
+    return `${n}m`;
+  };
+
+  // Always set these
   setTextAny(['entryDetailsPremieredValue', 'detailPremieredValue'], inferredPremiered);
-  setTextAny(['entryDetailsEpisodesValue',  'detailEpisodesValue' ], totalEps(seasons) || 'N/A');
-  setTextAny(['entryDetailsDurationValue',  'detailDurationValue' ], inferredDuration);
   setTextAny(['entryDetailsMalScoreValue',  'detailMalScoreValue' ],
     (typeof a.malScore === 'number') ? a.malScore.toFixed(2) : 'N/A'
   );
 
+  if (isSingleEpisode) {
+    // Hide Episodes tile (page + modal)
+    setStatVisibleByValueId('entryDetailsEpisodesValue', false);
+    setStatVisibleByValueId('detailEpisodesValue', false);
+
+    // Change label to "Duration"
+    setStatLabelByValueId('entryDetailsDurationValue', 'Duration');
+    setStatLabelByValueId('detailDurationValue', 'Duration');
+
+    // Prefer MAL seconds → nice "2h 10m"
+    let mins = null;
+    const sec = Number(a?.__malRaw?.average_episode_duration);
+    if (Number.isFinite(sec) && sec > 0) mins = Math.round(sec / 60);
+    if (!mins) mins = minutesFromDurationString(inferredDuration);
+
+    const pretty = mins ? formatRuntime(mins) : inferredDuration;
+    setTextAny(['entryDetailsDurationValue', 'detailDurationValue'], pretty || 'N/A');
+  } else {
+    // Show Episodes tile (page + modal)
+    setStatVisibleByValueId('entryDetailsEpisodesValue', true);
+    setStatVisibleByValueId('detailEpisodesValue', true);
+
+    // Keep label for series
+    setStatLabelByValueId('entryDetailsDurationValue', 'Duration (per ep.)');
+    setStatLabelByValueId('detailDurationValue', 'Duration (per ep.)');
+
+    setTextAny(['entryDetailsEpisodesValue', 'detailEpisodesValue'], epsTotal || 'N/A');
+    setTextAny(['entryDetailsDurationValue', 'detailDurationValue'], inferredDuration);
+  }
+
   setTextAny(['entryDetailsInfoJapanese',  'detailInfoJapanese' ], mi.japaneseTitle || a.japaneseTitle || a.titleJapanese || a.altTitles?.ja);
-  setTextAny(['entryDetailsInfoEnglish',   'detailInfoEnglish'  ], mi.englishTitle  || a.englishTitle  || a.titleEnglish  || a.altTitles?.en);
+  setTextAny(['entryDetailsInfoEnglish',   'detailInfoEnglish'  ],
+  mi.englishTitle || a.englishTitle || a.titleEnglish || a.altTitles?.en || a.title
+);
   const rawStatus = (mi.status || a.airingStatus || a.status || '');
-setTextAny(['entryDetailsInfoStatus', 'detailInfoStatus'], prettyAiringStatus(rawStatus));
+  setTextAny(['entryDetailsInfoStatus', 'detailInfoStatus'], prettyAiringStatus(rawStatus));
   setTextAny(['entryDetailsInfoAired',     'detailInfoAired'    ], mi.aired         || a.aired);
   setTextAny(['entryDetailsInfoBroadcast', 'detailInfoBroadcast'], mi.broadcast     || a.broadcast);
   setTextAny(['entryDetailsInfoProducers', 'detailInfoProducers'], mi.producers     || a.producers);
@@ -6154,7 +6284,9 @@ setTextAny(['entryDetailsInfoStatus', 'detailInfoStatus'], prettyAiringStatus(ra
         ? getAnimeById(rid)
         : (animeList || []).find(x => String(x?.id) === String(rid));
 
-      const name = esc(b?.title || `#${rid}`);
+      const relatedMap = window.__entryDetailsExtra?.relatedById || {};
+const relTitle = relatedMap[String(rid)] || '';
+const name = esc(b?.title || relTitle || `#${rid}`);
       const hid = encodeURIComponent(rid);
       return `<li><a href="#entrydetails?id=${hid}" data-open-entrydetails="${hid}">${name}</a></li>`;
     }).join('');
@@ -6497,20 +6629,63 @@ function renderBrowseCardHTML(it) {
     it?.title_japanese ||
     'Untitled';
 
-  const type = it?.type || 'TV';
-
   const pickFirstName = (arr) =>
     Array.isArray(arr) ? (arr.map(x => x?.name).filter(Boolean)[0] || null) : null;
 
-  const genre = pickFirstName(it?.genres) || 'N/A';
-  const theme = pickFirstName(it?.themes) || 'N/A';
+  const pickSecondDifferentName = (arr, first) => {
+    if (!Array.isArray(arr)) return null;
+    const names = arr.map(x => x?.name).filter(Boolean);
+    const a = (first || '').toLowerCase();
+    return names.find(n => String(n).toLowerCase() !== a) || null;
+  };
 
-  const season = it?.season ? String(it.season).replace(/\b\w/g, c => c.toUpperCase()) : null;
-  const year = it?.year ? String(it.year) : null;
-  const eps = Number.isFinite(Number(it?.episodes)) ? `${Number(it.episodes)} Eps` : 'N/A Eps';
+  const capWords = (s) =>
+    String(s || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\b\w/g, c => c.toUpperCase());
 
-  const line1 = `${type} • ${genre} • ${theme}`;
-  const line2 = `${(season && year) ? `${season} ${year}` : 'N/A'} • ${eps}`;
+  const typeNorm = (raw) => {
+    raw = String(raw || '').trim();
+    if (!raw) return 'TV';
+    if (/^tv$/i.test(raw)) return 'TV';
+    if (/^ona$/i.test(raw)) return 'ONA';
+    if (/^ova$/i.test(raw)) return 'OVA';
+    if (/tv[\s-]*special/i.test(raw)) return 'Special';
+    return capWords(raw);
+  };
+
+  // Line 1: "TV • Psychological • School" (no N/A, normalize casing)
+  const type = typeNorm(it?.type);
+  const genre = pickFirstName(it?.genres); // e.g. Psychological
+  const tag3 =
+    pickFirstName(it?.themes) ||
+    pickFirstName(it?.demographics) ||
+    pickSecondDifferentName(it?.genres, genre); // fallback that isn't a duplicate
+
+  const line1 = [type, genre, tag3].filter(Boolean).join(' • ');
+
+  // Line 2: "Fall 2006 • 37 Eps" (never "Fall 2006 2006")
+  const seasonRaw = it?.season ? capWords(it.season) : '';
+  const yearRaw = it?.year ? String(it.year) : '';
+
+  let premiered = 'N/A';
+  if (seasonRaw) {
+    // If season already contains a year (e.g. "Fall 2006"), don't append year again
+    premiered = /\b(19|20)\d{2}\b/.test(seasonRaw)
+      ? seasonRaw
+      : (yearRaw ? `${seasonRaw} ${yearRaw}` : seasonRaw);
+  } else if (yearRaw) {
+    premiered = yearRaw;
+  }
+
+  const epNum = Number(it?.episodes);
+  const eps =
+    Number.isFinite(epNum) && epNum > 0
+      ? `${epNum} ${epNum === 1 ? 'Ep' : 'Eps'}`
+      : 'N/A Eps';
+
+  const line2 = [premiered, eps].filter(Boolean).join(' • ');
 
   const img =
     it?.images?.jpg?.large_image_url ||
@@ -6707,45 +6882,17 @@ function renderBrowseResults(items) {
   // Remove duplicates by MAL id
   items = dedupeByMalId(items);
 
+  // Store search results into the local browse meta DB (so future searches feel instant)
+  upsertBrowseMetaItems(items, 'search');
 
-
-  const cards = (items || []).map(it => {
-    const title =
-      it?.title_english ||
-      it?.title ||
-      it?.title_japanese ||
-      'Untitled';
-
-    const type = it?.type || 'TV';
-
-    const g = Array.isArray(it?.genres) ? it.genres.map(x => x?.name).filter(Boolean) : [];
-    const genres = g.slice(0, 3).join(' - ');
-
-    const meta = genres ? `${type} - ${genres}` : type;
-
-    const img =
-      it?.images?.jpg?.large_image_url ||
-      it?.images?.jpg?.image_url ||
-      it?.images?.webp?.large_image_url ||
-      it?.images?.webp?.image_url ||
-      '';
-
-    return `
-      <div class="browse-card" data-mal-id="${String(it?.mal_id || '')}">
-        <div class="browse-cover">
-          ${img ? `<img src="${img}" alt="">` : `<i class="fas fa-image"></i>`}
-        </div>
-        <div class="browse-info">
-          <div class="browse-title">${escapeHtml(title)}</div>
-          <div class="browse-divider"></div>
-          <div class="browse-meta">${escapeHtml(meta)}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  shell.innerHTML = `<div class="browse-results-grid">${cards}</div>`;
+  // Use the SAME renderer as home cards (clean style + 2 lines + Add button)
+  shell.innerHTML = `
+    <div class="browse-results-grid">
+      ${(items || []).map(renderBrowseCardHTML).join('')}
+    </div>
+  `;
 }
+
 
 async function runBrowseSearch(q) {
   const shell = document.getElementById('browseResultsShell');
@@ -6905,7 +7052,7 @@ aired: airedTxt,
   englishTitle: d?.alternative_titles?.en || '',
   premiered: premiered || '',
   duration: durationStr || '',
-  status: prettyAiringStatus(status),
+  status: prettyAiringStatus(rawStatus),
   aired: airedTxt,
   broadcast: broadcastStr || 'N/A',
   producers: producersStr || 'N/A',
@@ -6934,40 +7081,308 @@ aired: airedTxt,
 async function openEntryDetailsMAL(malId) {
   if (!malId) return;
 
-  // cancel any previous details request
-  try { __browseAbort?.abort(); } catch {}
-  __browseAbort = new AbortController();
+  // Abort any previous details load
+  try { window.__browseAbort?.abort(); } catch {}
+  window.__browseAbort = new AbortController();
 
-  // Navigate immediately, then fill once fetched
-  window.__entryDetailsFrom = 'browse';
-  window.__entryDetailsId = `mal:${String(malId)}`;
+  // Keep origin set by openEntryDetails(id, from)
+  window.__entryDetailsFrom = window.__entryDetailsFrom || 'home';
+
+  const entryId = `mal:${String(malId)}`;
+  window.__entryDetailsId = entryId;
   window.__entryDetailsExternal = null;
 
-  location.hash = `#entrydetails?id=${encodeURIComponent(window.__entryDetailsId)}`;
+  // Navigate immediately (fast UI), then populate
+  location.hash = `#entrydetails?id=${encodeURIComponent(entryId)}`;
 
+  // ---------- helpers ----------
+  const clean = (v) => String(v ?? '').trim();
+
+  const joinNames = (arr) => {
+    if (!Array.isArray(arr)) return '';
+    const names = arr.map(x => clean(x?.name)).filter(Boolean);
+    return names.length ? names.join(', ') : '';
+  };
+
+  const titleCase = (s) =>
+    clean(s)
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, c => c.toUpperCase());
+
+  const fmtDate = (isoLike) => {
+    const s = clean(isoLike);
+    if (!s) return '';
+    const iso = s.slice(0, 10);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return '';
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    if (!Number.isFinite(d.getTime())) return '';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const airedText = (mal, jikan) => {
+    // ✅ Prefer Jikan’s nice string: "Jan 9, 2020 to Jun 25, 2020"
+    const js = clean(jikan?.aired?.string);
+    if (js) return js;
+
+    const from = fmtDate(mal?.start_date || jikan?.aired?.from);
+    const to   = fmtDate(mal?.end_date   || jikan?.aired?.to);
+
+    if (from && to) return `${from} to ${to}`;
+    return from || to || '';
+  };
+
+  const broadcastText = (mal, jikan) => {
+    // ✅ Prefer Jikan broadcast.string: "Thursdays at 01:05 (JST)"
+    const js = clean(jikan?.broadcast?.string);
+    if (js) return js;
+
+    const b = mal?.broadcast;
+    if (!b) return '';
+    if (typeof b === 'string') return clean(b);
+    if (b?.string) return clean(b.string);
+
+    const day = clean(b?.day_of_week || b?.day || '');
+    const time = clean(b?.start_time || b?.time || '');
+    if (day && time) return `${titleCase(day)} at ${time}`;
+    return day || time || '';
+  };
+
+  const ageRatingText = (malRating, jikanRating) => {
+    // ✅ Prefer Jikan rating full label
+    const jr = clean(jikanRating);
+    if (jr) return jr;
+
+    // MAL codes -> nice text
+    const mr = clean(malRating).toLowerCase();
+    if (!mr) return '';
+    const map = {
+      g: 'G - All Ages',
+      pg: 'PG - Children',
+      pg_13: 'PG-13 - Teens 13 or older',
+      r: 'R - 17+ (violence & profanity)',
+      r_plus: 'R+ - Mild Nudity',
+      rx: 'Rx - Hentai'
+    };
+    return map[mr] || mr.replace(/_/g, '-').toUpperCase();
+  };
+
+  const durationText = (mal, jikan) => {
+    // Prefer MAL seconds -> "24 min"
+    const sec = Number(mal?.average_episode_duration);
+    if (Number.isFinite(sec) && sec > 0) {
+      const mins = Math.round(sec / 60);
+      if (mins > 0) return `${mins} min`;
+    }
+    // fallback Jikan "24 min per ep"
+    return clean(jikan?.duration) || '';
+  };
+
+  const inferPremiered = (mal, jikan) => {
+    if (mal?.start_season?.season && mal?.start_season?.year) {
+      const seasonRaw = clean(mal.start_season.season).toLowerCase();
+      const map = { winter: 'Winter', spring: 'Spring', summer: 'Summer', fall: 'Fall', autumn: 'Fall' };
+      const season = map[seasonRaw] || (seasonRaw ? seasonRaw[0].toUpperCase() + seasonRaw.slice(1) : '');
+      return season ? `${season} ${mal.start_season.year}` : '';
+    }
+    const js = clean(jikan?.season);
+    const jy = jikan?.year;
+    if (js && jy) return `${js[0].toUpperCase() + js.slice(1)} ${jy}`;
+    return '';
+  };
+
+  // ---------- fetch ----------
   try {
-    const full = await fetchAnimeById(malId, { signal: __browseAbort.signal });
-    if (!full) throw new Error('MAL details missing data payload');
+    const res = await fetch(
+      malApiUrl(`/api/anime/${encodeURIComponent(malId)}/full`),
+      { signal: window.__browseAbort.signal }
+    );
+    if (!res.ok) throw new Error(`Worker /full failed: ${res.status}`);
 
-    const mapped = mapMalToEntryDetailsModel(full);
+    const payload = await res.json();
 
-    // ✅ MAL-only: just render; no DB writes at all
-    window.__entryDetailsExternal = mapped;
+    // Worker returns { ok:true, details, jikan, ... }
+    const mal = payload?.details || null;
+    const jikan = payload?.jikan || null;
 
-    // If still on the same entrydetails id, render now
-    const raw = location.hash || '';
-    const qs = raw.includes('?') ? raw.split('?')[1] : '';
+    if (!mal?.id) throw new Error('Missing payload.details');
+
+    // ✅ Titles: English first; Japanese should prefer Jikan (avoids “JP + EN mashed”)
+    const titleEN =
+      clean(mal?.alternative_titles?.en) ||
+      clean(jikan?.title_english) ||
+      clean(mal?.title) ||
+      clean(jikan?.title) ||
+      clean(mal?.alternative_titles?.ja) ||
+      'Untitled';
+
+    const titleJA =
+      clean(jikan?.title_japanese) ||
+      clean(mal?.alternative_titles?.ja) ||
+      '';
+
+    // ✅ Prefer Jikan for these human-readable fields
+    const aired      = airedText(mal, jikan);
+    const broadcast  = broadcastText(mal, jikan);
+    const producers  = joinNames(jikan?.producers) || joinNames(mal?.producers) || '';
+    const licensors  = joinNames(jikan?.licensors) || joinNames(mal?.licensors) || '';
+    const studios    = joinNames(jikan?.studios)   || joinNames(mal?.studios)   || '';
+    const source     = clean(jikan?.source) ? titleCase(jikan.source) : titleCase(mal?.source);
+    const ageRating  = ageRatingText(mal?.rating, jikan?.rating);
+
+    const premiered  = inferPremiered(mal, jikan);
+    const duration   = durationText(mal, jikan);
+
+    // ---------- relations ----------
+    const relatedById = {};
+    const relatedIds = [];
+    const addRel = (rawId, title) => {
+      const idNum = Number(rawId);
+      if (!Number.isFinite(idNum) || idNum <= 0) return;
+      const rid = `mal:${idNum}`;
+      if (rid === entryId) return;
+      const t = clean(title);
+      if (t && !relatedById[rid]) relatedById[rid] = t;
+      relatedIds.push(rid);
+    };
+
+    (mal?.related_anime || []).forEach(r => addRel(r?.node?.id, r?.node?.title));
+
+    (payload?.relations || []).forEach(group => {
+      (group?.entry || []).forEach(e => {
+        const type = clean(e?.type).toLowerCase();
+        if (type && type !== 'anime') return;
+        addRel(e?.mal_id, e?.name || e?.title);
+      });
+    });
+
+    const uniqueRelatedIds = [...new Set(relatedIds)];
+
+    // ---------- store extras globally ----------
+    window.__entryDetailsExtra = {
+      jikan,
+      characters: payload?.characters ?? null,
+      staff: payload?.staff ?? null,
+      external_links: payload?.external_links ?? null,
+      relations: payload?.relations ?? null,
+      streaming: payload?.streaming ?? null,
+      themes: payload?.themes ?? null,
+      videos: payload?.videos ?? null,
+      pictures: payload?.pictures ?? null,
+
+      recommendations: payload?.recommendations ?? null,
+      statistics: payload?.statistics ?? null,
+      related_anime: payload?.related_anime ?? mal?.related_anime ?? null,
+      related_manga: payload?.related_manga ?? mal?.related_manga ?? null,
+
+      relatedById
+    };
+
+    // ---------- object EntryDetails renderer expects ----------
+    const mapped = {
+      id: entryId,
+      title: titleEN,
+      image: mal?.main_picture?.large || mal?.main_picture?.medium || '',
+      description: mal?.synopsis || '',
+
+      type: clean(mal?.media_type).toUpperCase(),
+      genres: Array.isArray(mal?.genres) ? mal.genres.map(g => g?.name).filter(Boolean) : [],
+      themes: [],
+
+      malScore: (typeof mal?.mean === 'number') ? mal.mean : null,
+
+      premieredTimeline: premiered,
+      duration: duration,
+      aired: aired,
+
+      malInfo: {
+        japaneseTitle: titleJA,
+        englishTitle: titleEN,          // ✅ ensures English field always has something
+        premiered: premiered,
+        duration: duration,
+        status: clean(mal?.status || ''), // keep raw code; render uses prettyAiringStatus()
+        aired: aired,
+        broadcast: broadcast,
+        producers: producers,
+        licensors: licensors,
+        studios: studios,
+        source: source,
+        ageRating: ageRating
+      },
+
+      seasons: [{
+        season: premiered,
+        episodes: (typeof mal?.num_episodes === 'number') ? mal.num_episodes : (Number(jikan?.episodes) || 0),
+        duration: duration,
+        format: clean(mal?.media_type).toUpperCase()
+      }],
+
+      currentlyAiring: clean(mal?.status).toLowerCase() === 'currently_airing',
+      linkRelations: uniqueRelatedIds.length ? { linkedIds: uniqueRelatedIds } : undefined,
+      __malRaw: mal
+    };
+
+    // Only render if we’re still on the same entry
+    const rawHash = location.hash || '';
+    const qs = rawHash.includes('?') ? rawHash.split('?')[1] : '';
     const params = new URLSearchParams(qs);
     const currentId = params.get('id');
 
-    if (String(currentId) === String(window.__entryDetailsId)) {
-      renderEntryDetailsPage();
+    if (String(currentId) === String(entryId)) {
+      window.__entryDetailsExternal = mapped;
+      if (typeof renderEntryDetailsPage === 'function') renderEntryDetailsPage();
     }
   } catch (err) {
     if (err?.name === 'AbortError') return;
-    console.error(err);
+    console.error('[AniTrack] openEntryDetailsMAL failed:', err);
   }
 }
+
+
+function mapMALToEntryDetails(d) {
+  if (!d) return null;
+
+  const join = (arr) => Array.isArray(arr) ? arr.map(x => x?.name).filter(Boolean).join(', ') : '';
+
+  const duration =
+    d?.average_episode_duration
+      ? `${Math.round(d.average_episode_duration / 60)} min`
+      : '';
+
+  const broadcast =
+    typeof d?.broadcast === 'string'
+      ? d.broadcast
+      : d?.broadcast?.day_of_week
+        ? `${d.broadcast.day_of_week} at ${d.broadcast.start_time || ''}`.trim()
+        : '';
+
+  return {
+    id: `mal:${d.id}`,
+    title: d?.alternative_titles?.en || d?.title || d?.alternative_titles?.ja,
+    image: d?.main_picture?.large || d?.main_picture?.medium || '',
+    description: d?.synopsis || '',
+    type: (d?.media_type || '').toUpperCase(),
+    genres: Array.isArray(d?.genres) ? d.genres.map(g => g.name) : [],
+    malScore: d?.mean ?? null,
+    duration,
+    aired: d?.start_date || '',
+    malInfo: {
+      status: d?.status || '',
+      broadcast,
+      producers: join(d?.producers),
+      licensors: join(d?.licensors),
+      studios: join(d?.studios),
+      source: d?.source || '',
+      ageRating: d?.rating || ''
+    },
+    seasons: [{
+      episodes: d?.num_episodes || 0,
+      duration
+    }]
+  };
+}
+
 
 
 // ============================
@@ -7068,8 +7483,14 @@ function mapMalToEntryDetailsModel(d) {
     (typeof d?.broadcast?.string === 'string' ? d.broadcast.string : '') ||
     '';
 
-  const joinNames = (arr) =>
-    Array.isArray(arr) ? arr.map(x => x?.name).filter(Boolean).join(', ') : '';
+  const joinNames = (arr) => {
+    if (!Array.isArray(arr)) return '';
+    return arr
+      .map(x => x?.name || x?.node?.name || x?.title || '')
+      .map(s => String(s).trim())
+      .filter(Boolean)
+      .join(', ');
+  };
 
   const producers = joinNames(d?.producers);
   const licensors = joinNames(d?.licensors);

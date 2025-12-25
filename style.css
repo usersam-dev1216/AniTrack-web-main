@@ -73,7 +73,7 @@ body::before, body::after {
   justify-content: center;
   align-items: flex-end;
   gap: 10px;
-  font-size: 13px;
+  font-weight: 500;
 }
 
 .sb-auth[hidden] {
@@ -87,6 +87,7 @@ body::before, body::after {
   font: inherit;
   color: var(--accent-3);
   cursor: pointer;
+
 }
 
 .sb-auth-link:hover {
@@ -599,7 +600,17 @@ color: var(--text-secondary);
 .spotlight-inner {
   position: relative;
   z-index: 2;
-  padding: 330px 28px 34px;
+
+  /* Full-height layout so content can sit at the bottom-left */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+
+  /* Button is absolute, so we don't need huge top padding anymore */
+  padding: 28px 28px 46px;
+
   max-width: 1180px;
   will-change: transform, opacity;
 }
@@ -691,18 +702,27 @@ color: var(--text-secondary);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
+
+  /* Non-webkit fallback: 4 lines */
+  max-height: 6em;
+
   overflow: hidden;
-  margin: 0 0 58px;
 }
 
 .spotlight-detail-dock {
   position: absolute;
   left: 28px;
-  bottom: 500px;
+  top: 28px;
+  bottom: auto;
   z-index: 5;
 }
 
 .spotlight-detail {
+  position: absolute !important;
+  left: 28px;
+  top: 28px;
+  z-index: 5;
+
   margin: 0 !important;
   align-self: auto !important;
   padding: 0 !important;
@@ -713,6 +733,7 @@ color: var(--text-secondary);
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   border-radius: 0 !important;
+
   color: rgba(255,255,255,0.92);
   font-weight: 700;
   letter-spacing: .2px;
@@ -764,7 +785,7 @@ color: var(--text-secondary);
 
 @media (max-width: 900px) {
   .spotlight-inner {
-    padding: 46px 18px 40px;
+    padding: 18px 18px 40px;
   }
 
   .spotlight-title {
@@ -775,9 +796,18 @@ color: var(--text-secondary);
     max-width: 95%;
   }
 
+  /* keep "Show Details" pinned top-left on mobile too */
+  .spotlight-detail {
+    left: 18px;
+    top: 18px;
+    bottom: auto;
+  }
+
+  /* (safe even if unused) */
   .spotlight-detail-dock {
     left: 18px;
-    bottom: 28px;
+    top: 18px;
+    bottom: auto;
   }
 }
 
@@ -4133,6 +4163,18 @@ border: 1px solid rgba(167, 139, 250, .12);
   margin: 6px 0 0;
   padding-left: 22px;
   list-style: disc;
+
+  /* scroll like synopsis when long (≈ 5 items visible) */
+  max-height: 220px;
+  overflow: auto;
+  scrollbar-width: none;
+
+  /* keeps text away from edge when scrolling */
+  padding-right: 10px;
+}
+
+.relations-list::-webkit-scrollbar {
+  display: none;
 }
 
 .relations-list li {
@@ -4461,21 +4503,25 @@ border: 1px solid rgba(167, 139, 250, .12);
 }
 
 .detail-modal .detail-row {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   line-height: 1.35;
 }
 
 .detail-modal .detail-label {
-  display: inline;
+  flex: 0 0 110px;
+  white-space: nowrap;
   font-weight: 600;
   color: var(--text-primary);
-  margin-right: 6px;
 }
 
 .detail-modal .detail-value {
-  display: inline;
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--text-secondary);
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @media (max-width: 768px) {
@@ -4807,9 +4853,27 @@ ease;
   gap: 7px;
 }
 
-.entrydetails-page .detail-row { display: block; line-height: 1.35; }
-.entrydetails-page .detail-label { display: inline; font-weight: 600; color: var(--text-primary); margin-right: 6px; }
-.entrydetails-page .detail-value { display: inline; color: var(--text-secondary); overflow-wrap: anywhere; }
+.entrydetails-page .detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.35;
+}
+
+.entrydetails-page .detail-label {
+  flex: 0 0 110px;       /* keeps all values aligned like your screenshot */
+  white-space: nowrap;   /* prevents label wrapping */
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.entrydetails-page .detail-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 
 /* Subtitle segment colors (same as DetailModal) */
 .entrydetails-page .detail-subtitle .dm-format { color: #97badb; }
