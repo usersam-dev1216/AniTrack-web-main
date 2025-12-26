@@ -56,9 +56,26 @@ body::before, body::after {
   transform: translateZ(0);
 }
 
-/* EntryDetails: body-level cover background (blur + black overlay) */
-body.route-entrydetails[data-entrydetails-bg="1"]::before {
+/* EntryDetails: cover BG should NOT affect the header.
+   Paint it on the page container (below header), not on <body>. */
+body.route-entrydetails[data-entrydetails-bg="1"]::before,
+body.route-entrydetails[data-entrydetails-bg="1"]::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Ensure the page becomes its own stacking context */
+body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page{
+  isolation: isolate;
+}
+
+/* Cover image blur layer */
+body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::before{
+  content: "";
+  position: absolute;
   inset: -22px;
+  pointer-events: none;
+
   background-image: var(--entrydetails-bg);
   background-size: cover;
   background-position: center;
@@ -66,21 +83,32 @@ body.route-entrydetails[data-entrydetails-bg="1"]::before {
   filter: blur(22px);
   opacity: 1;
   transform: scale(1.08) translateZ(0);
-  z-index: -2;
+  z-index: 0;
 }
 
-body.route-entrydetails[data-entrydetails-bg="1"]::after {
+/* Black overlay layer */
+body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
+  content: "";
+  position: absolute;
   inset: 0;
+  pointer-events: none;
+
   background: linear-gradient(
     180deg,
-    rgba(0,0,0,.75) 0%,
-    rgba(0,0,0,.92) 55%,
-    rgba(0,0,0,.98) 100%
+    rgba(0,0,0,.85) 0%,
+    rgba(0,0,0,.90) 55%,
+    rgba(0,0,0,.99) 100%
   );
   filter: none;
   opacity: 1;
   transform: translateZ(0);
-  z-index: -1;
+  z-index: 1;
+}
+
+/* Keep content above the overlay */
+body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page .detail-header{
+  position: relative;
+  z-index: 2;
 }
 
 
@@ -3686,7 +3714,7 @@ select.form-control option {
 }
 
 .detail-modal .modal-content.reposition-active::after,
-.entrydetails-page.reposition-active::after {
+.entrydetails-page.reposition-active .detail-header::after {
   content: "Drag to pan • Scroll to zoom • Click Save when done";
   position: absolute;
   top: 14px;
@@ -4448,7 +4476,7 @@ border: 1px solid rgba(167, 139, 250, .12);
 }
 
 .detail-modal #detailAnimeImage.detail-poster {
-  width: 300px;
+  width: 340px;
   aspect-ratio: 2/3;
   border-radius: 18px;
   overflow: hidden;
@@ -4705,11 +4733,8 @@ body.route-list header{
   background: transparent;
 }
 
-/* Disable any page overlay (body draws the overlay instead) */
-.entrydetails-page.has-bg::after {
-  display: none !important;
-  content: none !important;
-}
+/* Black overlay (limited to EntryDetails body area, not the header) */
+
 
 
 
@@ -4803,7 +4828,7 @@ ease;
 }
 
 .entrydetails-page #entryDetailsAnimeImage.detail-poster {
-  width: 300px;
+  width: 330px;
   aspect-ratio: 2/3;
   border-radius: 18px;
   overflow: hidden;
