@@ -2517,35 +2517,140 @@ function malLikeToHomeEntry(x, fallbackSeasonLabel = '') {
 }
 
 
-// Load 30 recommendations for EMPTY state:
-// 10 most popular, 10 currently airing, 10 upcoming
 async function loadHomeEmptyStateRecs() {
   if (__homeEmptyLoaded || __homeEmptyLoading) return;
   __homeEmptyLoading = true;
 
   try {
-    // fetch bigger lists then randomly pick 10 from each
-    const [popularRaw, airingRaw, upcomingRaw] = await Promise.all([
-      jikanFetchMostPopular({ limit: 50 }),
-      jikanFetchTopAiring({ limit: 50 }),
-      jikanFetchUpcoming({ limit: 50 })
+    // Spotlight categories (10 each):
+    // 1) Most popular
+    // 2) Currently airing (this season)
+    // 3) Upcoming (next season)
+    // 4) Top anime (current year)
+    // 5) Top anime (last season)
+
+    const COUNT = 10;
+
+    // Season labels (Winter/Spring/Summer/Fall YYYY)
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const curYear = now.getFullYear();
+    const order = ['Winter', 'Spring', 'Summer', 'Fall'];
+
+    const currentSeasonName =
+      month <= 3 ? 'Winter' :
+      month <= 6 ? 'Spring' :
+      month <= 9 ? 'Summer' :
+                   'Fall';
+
+    const currentSeasonLabel = `${currentSeasonName} ${curYear}`;
+
+    const curIdx = order.indexOf(currentSeasonName);
+    const nextIdx = (curIdx + 1) % 4;
+    const prevIdx = (curIdx + 3) % 4;
+
+    const nextYear = (currentSeasonName === 'Fall') ? (curYear + 1) : curYear;
+    const prevYear = (currentSeasonName === 'Winter') ? (curYear - 1) : curYear;
+
+    const nextSeasonLabel = `${order[nextIdx]} ${nextYear}`;
+    const lastSeasonLabel = `${order[prevIdx]} ${prevYear}`;
+
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const bySeason = (arr, label) => (arr || []).filter(x => norm(x?.season) === norm(label));
+    const byYear = (arr, year) => (arr || []).filter(x => Number(x?.year) === Number(year));
+
+    const sortByScoreDesc = (arr) =>
+      (arr || []).slice().sort((a, b) => (Number(b?.score) || 0) - (Number(a?.score) || 0));
+
+    const fillToCountUnique = (baseArr, extraArr, keyFn, max = COUNT) => {
+      const out = [];
+      const seen = new Set();
+
+      const add = (item) => {
+        if (!item) return;
+        const k = String(keyFn(item) ?? '');
+        if (!k || seen.has(k)) return;
+        seen.add(k);
+        out.push(item);
+      };
+
+      (baseArr || []).forEach(add);
+      if (out.length < max) (extraArr || []).forEach(add);
+
+      return out.slice(0, max);
+    };
+
+    // Fetch bigger lists, then take 10 from each bucket
+    const [popularRaw, airingRaw, upcomingRaw, allRaw] = await Promise.all([
+      jikanFetchMostPopular({ limit: 120 }),
+      jikanFetchTopAiring({ limit: 120 }),
+      jikanFetchUpcoming({ limit: 120 }),
+      jikanFetchTopAll({ limit: 500 })
     ]);
 
-    const popular10 = pickRandom(popularRaw, 30).map(x => malLikeToHomeEntry(x));
-    const airing10  = pickRandom(airingRaw, 30).map(x => malLikeToHomeEntry(x));
-    const upcoming10= pickRandom(upcomingRaw, 30).map(x => malLikeToHomeEntry(x));
+    const keyId = (x) => x?.mal_id;
 
-    // Spotlight = all 30 combined
-    __homeSpotlightPool = [...popular10, ...airing10, ...upcoming10];
+    // 1) Most popular (top 10)
+    const popular10 = (popularRaw || []).slice(0, COUNT).map(x => malLikeToHomeEntry(x)).filter(Boolean);
 
-    // Spotlight ids should match these objects
+    // 2) Airing this season (try season-filtered, else fallback to top airing)
+    const airingSeason = fillToCountUnique(
+      bySeason(airingRaw, currentSeasonLabel),
+      airingRaw,
+      keyId,
+      COUNT
+    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+    // 3) Upcoming next season (try season-filtered, else fallback to upcoming list)
+    const upcomingSeason = fillToCountUnique(
+      bySeason(upcomingRaw, nextSeasonLabel),
+      upcomingRaw,
+      keyId,
+      COUNT
+    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+    // 4) Top anime current year (prefer year-filtered, then fill from other lists, then fallback)
+    const topYearRaw = fillToCountUnique(
+      sortByScoreDesc(byYear(allRaw, curYear)),
+      sortByScoreDesc([
+        ...byYear(popularRaw, curYear),
+        ...byYear(airingRaw, curYear),
+        ...byYear(upcomingRaw, curYear),
+        ...(allRaw || [])
+      ]),
+      keyId,
+      COUNT
+    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+    // 5) Top anime last season (prefer season-filtered, then fill from other lists, then fallback)
+    const topLastSeasonRaw = fillToCountUnique(
+      sortByScoreDesc(bySeason(allRaw, lastSeasonLabel)),
+      sortByScoreDesc([
+        ...bySeason(popularRaw, lastSeasonLabel),
+        ...bySeason(airingRaw, lastSeasonLabel),
+        ...bySeason(upcomingRaw, lastSeasonLabel),
+        ...(allRaw || [])
+      ]),
+      keyId,
+      COUNT
+    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+    // Spotlight pool = all 5 buckets combined (50 items)
+    __homeSpotlightPool = [
+      ...popular10,
+      ...airingSeason,
+      ...upcomingSeason,
+      ...topYearRaw,
+      ...topLastSeasonRaw
+    ];
+
     __spotlightIds = __homeSpotlightPool.map(a => String(a.id));
     __spotlightIndex = 0;
 
-    // Fill the 3 home rows too
-    fillHomeRow(homeTopAiringRow, airing10, 1000);
+    // Keep the 3 home rows as they are (airing/popular/upcoming)
+    fillHomeRow(homeTopAiringRow, airingSeason, 1000);
     fillHomeRow(homeFavoritesRow, popular10, 1000);
-    fillHomeRow(homeRecentRow, upcoming10, 1000);
+    fillHomeRow(homeRecentRow, upcomingSeason, 1000);
 
     __homeEmptyLoaded = true;
   } catch (e) {
@@ -2554,6 +2659,7 @@ async function loadHomeEmptyStateRecs() {
     __homeEmptyLoading = false;
   }
 }
+
 let __spotlightKey = '';
 
 function renderHomePage() {
@@ -7390,6 +7496,15 @@ async function jikanFetchMostPopular({ limit = 12, signal } = {}) {
   );
   return jikanFetchList(url, { signal });
 }
+
+async function jikanFetchTopAll({ limit = 12, signal } = {}) {
+  const url = malApiUrl(
+    `/api/ranking?type=all&limit=${encodeURIComponent(limit)}&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
+  );
+  return jikanFetchList(url, { signal });
+}
+
+
 
 function renderBrowseEmpty() {
   const shell = document.getElementById('browseResultsShell');
