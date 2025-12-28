@@ -153,6 +153,68 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page .detail-hea
   opacity: 0.6;
 }
 
+/* keep guest buttons inline */
+#sbAuthGuest{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sidebar auth (logged-in state) */
+.sb-auth-user{
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  text-align: center;
+}
+
+.sb-auth-userline{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.sb-auth-username{
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.sb-auth-email{
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.sb-auth-logout{
+  border: 1px solid rgba(167, 139, 250, .25);
+  background: rgba(167, 139, 250, .08);
+  color: var(--accent-3);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.sb-auth-logout:hover{
+  background: rgba(167, 139, 250, .12);
+}
+
+/* Auth inline errors */
+.auth-error{
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(239, 71, 111, .12);
+  border: 1px solid rgba(239, 71, 111, .28);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 
 
 /* ===================== SETTINGS PAGE (route: #settings) ===================== */

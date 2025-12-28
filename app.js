@@ -262,15 +262,270 @@ const profileFab  = $('#profileFab');
 const accountFab  = $('#accountFab');
 const settingsFab = $('#settingsFab');
 
-const sbAuth   = $('#sbAuth');
+// -------------------- AUTH (Worker cookie sessions) --------------------
+const AUTH_API_BASE = 'https://anitrack-auth.usersam1216.workers.dev';
+const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot';
+
+// Sidebar auth UI
+const sbAuth      = $('#sbAuth');
+const sbAuthGuest = $('#sbAuthGuest');
+const sbAuthUser  = $('#sbAuthUser');
+const sbUserName  = $('#sbUserName');
+const sbUserEmail = $('#sbUserEmail');
+const sbLogout    = $('#sbLogout');
+
 const sbLogin  = $('#sbLogin');
 const sbSignup = $('#sbSignup');
 
+// Auth buttons + inline errors
+const suSubmitBtn  = $('#suSubmitBtn');
+const liSubmitBtn  = $('#liSubmitBtn');
+const suErrorEl    = $('#suError');
+const liErrorEl    = $('#liError');
+const accLogoutBtn = $('#accLogoutBtn');
 
-const AUTH_LS_KEY = 'AniTrack_CurrentUser';
+let __authUser = null;
+
+function __safeJson(res) {
+  return res.json().catch(() => ({}));
+}
+
+function getCachedAuthUser() {
+  try {
+    const raw = localStorage.getItem(AUTH_USER_KEY);
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    if (!u || typeof u !== 'object') return null;
+    if (!u.username && !u.email) return null;
+    return u;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedAuthUser(u) {
+  if (!u) { localStorage.removeItem(AUTH_USER_KEY); return; }
+  localStorage.setItem(AUTH_USER_KEY, JSON.stringify({
+    id: u.id || '',
+    username: u.username || '',
+    email: u.email || '',
+    emailVerified: !!u.emailVerified
+  }));
+}
+
+function setAuthUser(u) {
+  __authUser = u || null;
+  setCachedAuthUser(__authUser);
+  syncAuthUI();
+}
 
 function isUserLoggedIn() {
-  return !!localStorage.getItem(AUTH_LS_KEY);
+  return !!(__authUser || getCachedAuthUser());
+}
+
+function authUrl(path) {
+  return `${AUTH_API_BASE}${path}`;
+}
+
+async function authFetch(path, init = {}) {
+  const headers = { ...(init.headers || {}) };
+  return fetch(authUrl(path), {
+    ...init,
+    headers,
+    credentials: 'include'
+  });
+}
+
+function setAuthError(el, msg) {
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+
+function __usernameFromEmail(email) {
+  const base = String(email || '').split('@')[0] || 'user';
+  const cleaned = base.toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const suffix = String(Math.floor(1000 + Math.random() * 9000));
+  return ((cleaned || 'user') + '_' + suffix).slice(0, 24);
+}
+
+async function authSignup(email, username, password) {
+  const res = await authFetch('/auth/signup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, username, password })
+  });
+  const j = await __safeJson(res);
+  return { res, j };
+}
+
+async function authLogin(identifier, password) {
+  const res = await authFetch('/auth/login', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ identifier, password })
+  });
+  const j = await __safeJson(res);
+  return { res, j };
+}
+
+async function authMe() {
+  const res = await authFetch('/auth/me', { method: 'GET' });
+  const j = await __safeJson(res);
+  if (res.ok && j?.ok && j?.user) return j.user;
+  return null;
+}
+
+async function authLogout() {
+  try { await authFetch('/auth/logout', { method: 'POST' }); } catch {}
+  setAuthUser(null);
+}
+
+function syncAccountFields() {
+  const u = __authUser || getCachedAuthUser();
+  const un = $('#accUsername');
+  const em = $('#accEmail');
+  if (un) un.value = u?.username || '';
+  if (em) em.value = u?.email || '';
+}
+
+function syncAuthUI() {
+  const u = __authUser || getCachedAuthUser();
+  const logged = !!u;
+
+  if (sbAuthGuest) sbAuthGuest.hidden = logged;
+  if (sbAuthUser) sbAuthUser.hidden = !logged;
+
+  if (logged) {
+    if (sbUserName) sbUserName.textContent = u.username || '—';
+    if (sbUserEmail) sbUserEmail.textContent = u.email || '';
+  } else {
+    if (sbUserName) sbUserName.textContent = '—';
+    if (sbUserEmail) sbUserEmail.textContent = '';
+  }
+
+  syncAccountFields();
+}
+
+async function refreshAuthSession({ silent = false } = {}) {
+  try {
+    const u = await authMe();
+    if (u) { setAuthUser(u); return true; }
+    setAuthUser(null);
+    return false;
+  } catch {
+    // likely CORS / cookies blocked; keep cached snapshot
+    if (!silent) {
+      showNotification?.('Auth check failed (CORS/cookies). Ensure Auth Worker ALLOWED_ORIGINS includes your GitHub Pages origin.');
+    }
+    syncAuthUI();
+    return false;
+  }
+}
+
+function initAuth() {
+  // show cached instantly, then verify via /auth/me
+  const cached = getCachedAuthUser();
+  if (cached) __authUser = cached;
+  syncAuthUI();
+  refreshAuthSession({ silent: true });
+
+  // Sidebar logout
+  sbLogout?.addEventListener('click', async () => {
+    await authLogout();
+    closeSidebarFn?.();
+    location.hash = '#home';
+  });
+
+  // Account sign out
+  accLogoutBtn?.addEventListener('click', async () => {
+    await authLogout();
+    location.hash = '#home';
+  });
+
+  // SIGNUP
+  const signupForm = userSignupView?.querySelector('form.auth-card');
+  signupForm?.addEventListener('submit', (e) => { e.preventDefault(); suSubmitBtn?.click(); });
+
+  suSubmitBtn?.addEventListener('click', async () => {
+    setAuthError(suErrorEl, '');
+
+    const email = String($('#suEmail')?.value || '').trim();
+    let username = String($('#suUsername')?.value || '').trim();
+    const password = String($('#suPassword')?.value ?? '');
+    const password2 = String($('#suPassword2')?.value ?? '');
+
+    if (!email || !email.includes('@')) return setAuthError(suErrorEl, 'Please enter a valid email.');
+    if (password.length < 8) return setAuthError(suErrorEl, 'Password must be at least 8 characters.');
+    if (password !== password2) return setAuthError(suErrorEl, 'Passwords do not match.');
+    if (!username) username = __usernameFromEmail(email);
+
+    suSubmitBtn.disabled = true;
+    try {
+      const { res, j } = await authSignup(email, username, password);
+      if (!res.ok || !j?.ok) {
+        return setAuthError(suErrorEl, `Signup failed: ${j?.error || 'signup_failed'}`);
+      }
+
+      // Auto-login (sets session cookie)
+      const { res: lr, j: lj } = await authLogin(email, password);
+      if (!lr.ok || !lj?.ok) {
+        location.hash = '#userlogin';
+        showNotification?.('Account created. Please log in.');
+        return;
+      }
+
+      const ok = await refreshAuthSession({ silent: true });
+      if (!ok) {
+        return setAuthError(suErrorEl, 'Logged in, but cookie was not saved (browser may block third-party cookies).');
+      }
+
+      closeSidebarFn?.();
+      location.hash = '#account';
+      showNotification?.('Signed up & logged in.');
+    } catch {
+      setAuthError(suErrorEl, 'Signup failed (network/CORS). Check ALLOWED_ORIGINS on Auth Worker.');
+    } finally {
+      suSubmitBtn.disabled = false;
+    }
+  });
+
+  // LOGIN
+  const loginForm = userLoginView?.querySelector('form.auth-card');
+  loginForm?.addEventListener('submit', (e) => { e.preventDefault(); liSubmitBtn?.click(); });
+
+  liSubmitBtn?.addEventListener('click', async () => {
+    setAuthError(liErrorEl, '');
+
+    // worker expects "identifier" (email OR username)
+    const identifier = String($('#liEmail')?.value || '').trim();
+    const password = String($('#liPassword')?.value ?? '');
+
+    if (!identifier || !password) return setAuthError(liErrorEl, 'Please enter your email/username and password.');
+
+    liSubmitBtn.disabled = true;
+    try {
+      const { res, j } = await authLogin(identifier, password);
+      if (!res.ok || !j?.ok) {
+        return setAuthError(liErrorEl, `Login failed: ${j?.error || 'invalid_login'}`);
+      }
+
+      const ok = await refreshAuthSession({ silent: true });
+      if (!ok) {
+        return setAuthError(liErrorEl, 'Login worked, but cookie was not saved (browser may block third-party cookies).');
+      }
+
+      closeSidebarFn?.();
+      location.hash = '#account';
+      showNotification?.('Logged in.');
+    } catch {
+      setAuthError(liErrorEl, 'Login failed (network/CORS). Check ALLOWED_ORIGINS on Auth Worker.');
+    } finally {
+      liSubmitBtn.disabled = false;
+    }
+  });
 }
 
 
@@ -5541,14 +5796,9 @@ document.body.addEventListener('click', (e) => {
   if (modal) closeWithAnimation(modal);
 });
 
-  // Sidebar bottom auth (only when logged out)
-  const refreshSidebarAuth = () => {
-    if (!sbAuth) return;
-    sbAuth.hidden = isUserLoggedIn();
-  };
-
-  refreshSidebarAuth();
-  window.addEventListener('storage', refreshSidebarAuth);
+  // Sidebar auth (guest vs user)
+  syncAuthUI();
+  window.addEventListener('storage', syncAuthUI);
 
   sbLogin?.addEventListener('click', () => {
     closeSidebarFn();
@@ -7924,6 +8174,18 @@ function applyRoute(){
     return;
   }
 
+  // Require login for Account/Profile
+  if ((isAccount || isProfile) && !isUserLoggedIn()) {
+    location.hash = '#userlogin';
+    return;
+  }
+
+  // If already logged in, prevent opening auth pages
+  if ((isUserSignup || isUserLogin) && isUserLoggedIn()) {
+    location.hash = '#account';
+    return;
+  }
+
   // views
   if (homeView)          homeView.hidden          = !isHome;
   if (listView)          listView.hidden          = !isList;
@@ -8009,6 +8271,7 @@ lsViewBtn?.addEventListener('click', () => {
 function init() {
   loadFromLocalStorage();
   setupEventListeners();
+  initAuth();
   __initHomeRowNav();
 
   syncViewModeBtn();

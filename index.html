@@ -268,7 +268,7 @@
 <form class="auth-card" autocomplete="off">
 
   <div class="auth-section-head">
-    <h2 class="auth-section-title">Login</h2>
+    <h2 class="auth-section-title">Sign Up</h2>
     <div class="auth-section-line"></div>
   </div>
 
@@ -302,13 +302,15 @@
 
 
 
+          <div id="suError" class="auth-error" hidden></div>
+
           <div class="auth-bottom">
             <div class="auth-alt">
               <div class="auth-alt-title">Already have an account?</div>
               <a class="auth-alt-link" href="#userlogin">Click here to Login</a>
             </div>
 
-            <button class="auth-primary" type="button">Sign Up</button>
+            <button id="suSubmitBtn" class="auth-primary" type="button">Sign Up</button>
           </div>
         </form>
       </div>
@@ -321,7 +323,7 @@
 <form class="auth-card" autocomplete="off">
 
   <div class="auth-section-head">
-    <h2 class="auth-section-title">Sign Up</h2>
+    <h2 class="auth-section-title">Login</h2>
     <div class="auth-section-line"></div>
   </div>
 
@@ -334,13 +336,15 @@
             <input id="liPassword" class="auth-input" type="password" placeholder="Enter your password">
           </div>
 
+          <div id="liError" class="auth-error" hidden></div>
+
           <div class="auth-bottom">
             <div class="auth-alt">
               <div class="auth-alt-title">Don’t have an account?</div>
               <a class="auth-alt-link" href="#usersignup">Create one here</a>
             </div>
 
-            <button class="auth-primary" type="button">Login</button>
+            <button id="liSubmitBtn" class="auth-primary" type="button">Login</button>
           </div>
         </form>
       </div>
@@ -463,7 +467,7 @@
               <button class="account-btn ghost" type="button">
                 Export my data
               </button>
-              <button class="account-btn danger" type="button">
+              <button id="accLogoutBtn" class="account-btn danger" type="button">
                 Sign out
               </button>
             </div>
@@ -1127,10 +1131,22 @@
     </nav>
 
     <!-- Bottom profile area (only shows when NOT logged in) -->
-    <div id="sbAuth" class="sb-auth" hidden>
-      <button id="sbLogin" class="sb-auth-link" type="button">Login</button>
-      <span class="sb-auth-sep">|</span>
-      <button id="sbSignup" class="sb-auth-link" type="button">Sign up</button>
+    <div id="sbAuth" class="sb-auth">
+      <!-- Guest -->
+      <div id="sbAuthGuest">
+        <button id="sbLogin" class="sb-auth-link" type="button">Login</button>
+        <span class="sb-auth-sep">|</span>
+        <button id="sbSignup" class="sb-auth-link" type="button">Sign up</button>
+      </div>
+
+      <!-- Logged in -->
+      <div id="sbAuthUser" class="sb-auth-user" hidden>
+        <div class="sb-auth-userline">
+          <div id="sbUserName" class="sb-auth-username">—</div>
+          <div id="sbUserEmail" class="sb-auth-email"></div>
+        </div>
+        <button id="sbLogout" class="sb-auth-logout" type="button">Logout</button>
+      </div>
     </div>
   </aside>
 
