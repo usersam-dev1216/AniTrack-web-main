@@ -80,7 +80,7 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::before{
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: blur(22px);
+  filter: blur(40px);
   opacity: 1;
   transform: scale(1.08) translateZ(0);
   z-index: 0;
@@ -4279,7 +4279,7 @@ border: 1px solid rgba(167, 139, 250, .12);
   list-style: disc;
 
   /* scroll like synopsis when long (≈ 5 items visible) */
-  max-height: 220px;
+  max-height: 320px;
   overflow: auto;
   scrollbar-width: none;
 
@@ -4541,7 +4541,7 @@ border: 1px solid rgba(167, 139, 250, .12);
   line-height: 1.6;
   opacity: .92;
   white-space: pre-line;
-  max-height: 330px;
+  max-height:fit-content;
   overflow: auto;
   scrollbar-width: none;
 }

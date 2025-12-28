@@ -6239,9 +6239,20 @@ document.getElementById('entryDetailsBackBtn')?.addEventListener('click', (e) =>
     entryDetailsView.addEventListener('click', (e) => {
       const a = e.target.closest('a[data-open-entrydetails], a[data-open-relation]');
       if (!a) return;
-      const id = a.getAttribute('data-open-entrydetails') || a.getAttribute('data-open-relation');
-      if (!id) return;
+
+      const rawId =
+        a.getAttribute('data-open-entrydetails') ||
+        a.getAttribute('data-open-relation');
+
+      if (!rawId) return;
+
       e.preventDefault();
+
+      // IMPORTANT: relations list currently stores encoded ids (e.g. mal%3A12345).
+      // Decode once so openEntryDetails doesn't double-encode.
+      let id = rawId;
+      try { id = decodeURIComponent(rawId); } catch (_) {}
+
       openEntryDetails(id);
     });
   }
@@ -6575,7 +6586,8 @@ try {
 const relTitle = relatedMap[String(rid)] || '';
 const name = esc(b?.title || relTitle || `#${rid}`);
       const hid = encodeURIComponent(rid);
-      return `<li><a href="#entrydetails?id=${hid}" data-open-entrydetails="${hid}">${name}</a></li>`;
+      // store RAW id in data-attr (no double-encode problems)
+      return `<li><a href="#entrydetails?id=${hid}" data-open-entrydetails="${esc(rid)}">${name}</a></li>`;
     }).join('');
   }
 
