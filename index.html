@@ -232,23 +232,18 @@
         <!-- List tools bar (search + filter) -->
         <div class="list-grid-topbar" aria-label="Search and filter">
           <div class="list-header-center-group">
-            <div class="search-box group">
-              <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
-                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-              </svg>
-              <input type="text" id="searchInput" class="input" placeholder="Search anime...">
-              <button id="clearSearch" class="clear-search-btn" style="display:none;">Clear All</button>
-            </div>
+  <div id="statusToggle" class="status-toggle" role="tablist" aria-label="Status filter">
+    <button class="status-chip active" type="button" data-status="All">All</button>
+    <button class="status-chip" type="button" data-status="Watching">Watching</button>
+    <button class="status-chip" type="button" data-status="Completed">Completed</button>
+    <button class="status-chip" type="button" data-status="On Hold">On Hold</button>
+    <button class="status-chip" type="button" data-status="Plan to Watch">Plan to Watch</button>
+    <button class="status-chip" type="button" data-status="Dropped">Dropped</button>
+  </div>
 
-            <button id="filterHeaderBtn"
-              class="status-chip list-pill-btn list-icon-pill"
-              type="button"
-              title="Filter"
-              aria-label="Filter">
-              <i class="fas fa-filter"></i>
-            </button>
-          </div>
+  
+</div>
+
         </div>
 
 

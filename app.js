@@ -421,7 +421,7 @@ function syncAuthUI() {
   if (headerProfileTitle) {
     headerProfileTitle.textContent = logged
       ? (u.username || u.email || 'User')
-      : 'Guest';
+      : 'Welcome!';
   }
 
   if (headerProfileLink1) {
@@ -2130,12 +2130,17 @@ function renderAnimeCards() {
   animeGrid.innerHTML = '';
 
   if (list.length === 0) {
-    if (searchInput && searchInput.value) {
+    const isFiltered =
+      !!(searchInput && searchInput.value) ||
+      (activeStatusFilter && activeStatusFilter !== 'All') ||
+      ((sortOption?.value || '') === 'favorites');
+
+    if (isFiltered) {
       animeGrid.innerHTML = `
         <div class="empty-state">
           <i class="fas fa-search"></i>
           <h2>No Anime Found</h2>
-          <p>Try adjusting your search or add a new anime to your collection.</p>
+          <p>Try changing your filters (status / favorites / sort).</p>
         </div>`;
     } else {
       animeGrid.innerHTML = `
@@ -6172,32 +6177,47 @@ deleteAnimeBtn?.addEventListener('click', () => {
 });
 
 
-  // Search / Sort
-  if (searchInput) {
-    searchInput.addEventListener('input', () => {
-      renderAnimeCards();
-      if (clearSearchBtn) {
-        clearSearchBtn.style.display = searchInput.value ? 'block' : 'none';
-      }
+  // Status chips (replaces search box on #list)
+  const setActiveStatus = (status) => {
+    activeStatusFilter = status || 'All';
+
+    // Header chips
+    $$('.status-chip[data-status]').forEach(chip => {
+      chip.classList.toggle(
+        'active',
+        (chip.dataset.status || 'All') === activeStatusFilter
+      );
     });
-  }
-  clearSearchBtn?.addEventListener('click', () => {
-    searchInput.value = '';
-    clearSearchBtn.style.display = 'none';
+
+    // Keep list sidebar buttons in sync (you already have this)
+    syncListSidebarStatus?.();
+
+    // Quick MAL-add button (hidden in "All")
+    if (quickMalAddBtn) {
+      quickMalAddBtn.style.display =
+        (activeStatusFilter === 'All') ? 'none' : 'inline-flex';
+    }
+  };
+
+  // Click any chip in the header toggle bar
+  statusToggle?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.status-chip[data-status]');
+    if (!chip) return;
+
+    setActiveStatus(chip.dataset.status || 'All');
     renderAnimeCards();
   });
+
+  // Keep sort working
   sortOption?.addEventListener('change', renderAnimeCards);
 
-  // Quick MAL-add button (hidden in "All" status)
-  if (quickMalAddBtn) {
-    // Initial state on load
-    quickMalAddBtn.style.display =
-      (activeStatusFilter === 'All') ? 'none' : 'inline-flex';
+  // Quick MAL-add action
+  quickMalAddBtn?.addEventListener('click', () => {
+    quickAddFromMALAndSave();
+  });
 
-    quickMalAddBtn.addEventListener('click', () => {
-      quickAddFromMALAndSave();
-    });
-  }
+  // Initial state on load
+  setActiveStatus(activeStatusFilter);
 
   /* --------------------------- LIST SIDEBAR (LIST PAGE ONLY) --------------------------- */
   (function initListSidebar(){
