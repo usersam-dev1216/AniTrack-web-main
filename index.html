@@ -40,8 +40,17 @@
       <button class="topnav-link" id="navSettingsBtn" type="button">Settings</button>
     </nav>
 
-    <!-- RIGHT: profile icon -->
+    <!-- RIGHT: profile (text + links) + icon -->
     <div class="header-right">
+      <div class="header-profile-meta" aria-label="Account shortcuts">
+        <div id="headerProfileTitle" class="header-profile-title">Welcome!</div>
+        <div class="header-profile-links">
+          <a id="headerProfileLink1" href="#userlogin">Login</a>
+          <span class="header-profile-sep">|</span>
+          <a id="headerProfileLink2" href="#usersignup">Sign Up</a>
+        </div>
+      </div>
+
       <button id="navProfileBtn" class="profile-icon-btn" type="button" aria-label="Profile">
         <i class="fas fa-user"></i>
       </button>
@@ -326,30 +335,14 @@
           </div>
         </div>
 
-        <!-- Results -->
-        <section class="home-section browse-home-shell">
-  <div class="home-section-head">
-    <h2 class="home-section-title">Currently Airing</h2>
-
-    <div class="home-section-filters" role="tablist" aria-label="Format filter">
-      <button class="home-filter-chip active" type="button" data-format="all">All</button>
-      <button class="home-filter-chip" type="button" data-format="TV">TV</button>
-      <button class="home-filter-chip" type="button" data-format="Movie">Movies</button>
-      <button class="home-filter-chip" type="button" data-format="OVA">OVA</button>
-      <button class="home-filter-chip" type="button" data-format="ONA">ONA</button>
-      <button class="home-filter-chip" type="button" data-format="Other">Other</button>
-    </div>
-  </div>
-  <div class="home-section-line"></div>
-
-  <div id="browseResultsShell" class="browse-results-shell">
-    <div class="empty-state">
-      <i class="fas fa-search"></i>
-      <h2>Search MyAnimeList</h2>
-      <p>Type a title to start browsing.</p>
-    </div>
-  </div>
-</section>
+        <!-- Results (cards only) -->
+        <div id="browseResultsShell" class="browse-results-shell">
+          <div class="empty-state">
+            <i class="fas fa-search"></i>
+            <h2>Search MyAnimeList</h2>
+            <p>Type a title to start browsing.</p>
+          </div>
+        </div>
 
     </main>
 

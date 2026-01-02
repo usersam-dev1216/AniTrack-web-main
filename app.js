@@ -7168,7 +7168,7 @@ function initBrowseSearch() {
     initBrowseSearch.__boundClicks = true;
 
     shell.addEventListener('click', (e) => {
-      const card = e.target.closest('.browse-card');
+      const card = e.target.closest('.browse-anime-card');
       if (!card) return;
 
       const malId = card.getAttribute('data-mal-id');
@@ -7316,109 +7316,52 @@ function renderBrowseHomeFromData({ upcoming = [], topAiring = [], mostPopular =
 }
 
 
-function renderBrowseCardHTML(it) {
-  const title =
-    it?.title_english ||
-    it?.title ||
-    it?.title_japanese ||
-    'Untitled';
-
-  const pickFirstName = (arr) =>
-    Array.isArray(arr) ? (arr.map(x => x?.name).filter(Boolean)[0] || null) : null;
-
-  const pickSecondDifferentName = (arr, first) => {
-    if (!Array.isArray(arr)) return null;
-    const names = arr.map(x => x?.name).filter(Boolean);
-    const a = (first || '').toLowerCase();
-    return names.find(n => String(n).toLowerCase() !== a) || null;
-  };
-
-  const capWords = (s) =>
-    String(s || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\b\w/g, c => c.toUpperCase());
-
-  const typeNorm = (raw) => {
-    raw = String(raw || '').trim();
-    if (!raw) return 'TV';
-    if (/^tv$/i.test(raw)) return 'TV';
-    if (/^ona$/i.test(raw)) return 'ONA';
-    if (/^ova$/i.test(raw)) return 'OVA';
-    if (/tv[\s-]*special/i.test(raw)) return 'Special';
-    return capWords(raw);
-  };
-
-  // Line 1: "TV • Psychological • School" (no N/A, normalize casing)
-  const type = typeNorm(it?.type);
-  const genre = pickFirstName(it?.genres); // e.g. Psychological
-  const tag3 =
-    pickFirstName(it?.themes) ||
-    pickFirstName(it?.demographics) ||
-    pickSecondDifferentName(it?.genres, genre); // fallback that isn't a duplicate
-
-  const line1 = [type, genre, tag3].filter(Boolean).join(' • ');
-
-  // Line 2: "Fall 2006 • 37 Eps" (never "Fall 2006 2006")
-  const seasonRaw = it?.season ? capWords(it.season) : '';
-  const yearRaw = it?.year ? String(it.year) : '';
-
-  let premiered = 'N/A';
-  if (seasonRaw) {
-    // If season already contains a year (e.g. "Fall 2006"), don't append year again
-    premiered = /\b(19|20)\d{2}\b/.test(seasonRaw)
-      ? seasonRaw
-      : (yearRaw ? `${seasonRaw} ${yearRaw}` : seasonRaw);
-  } else if (yearRaw) {
-    premiered = yearRaw;
-  }
-
-  const epNum = Number(it?.episodes);
-  const eps =
-    Number.isFinite(epNum) && epNum > 0
-      ? `${epNum} ${epNum === 1 ? 'Ep' : 'Eps'}`
-      : 'N/A Eps';
-
-  const line2 = [premiered, eps].filter(Boolean).join(' • ');
+function renderBrowseCardHTML(it){
+  const malId = it?.mal_id ?? it?.id ?? '';
+  const title = (it?.title || it?.title_english || it?.title_japanese || 'Untitled').toString().trim() || 'Untitled';
 
   const img =
+    it?.images?.webp?.large_image_url ||
     it?.images?.jpg?.large_image_url ||
     it?.images?.jpg?.image_url ||
-    it?.images?.webp?.large_image_url ||
-    it?.images?.webp?.image_url ||
     '';
 
-     // MAL score display (2 decimals) — don't show 0.00 when score is missing
-  const malScoreRaw = it?.score ?? it?.mean ?? it?.mal_score ?? it?.mean_score ?? null;
-  const malScoreStr = (malScoreRaw === null || malScoreRaw === undefined) ? '' : String(malScoreRaw).trim();
-  const malScoreNum = (malScoreStr !== '' && Number.isFinite(+malScoreStr) && (+malScoreStr > 0))
-    ? +malScoreStr
-    : null;
-  const ratingDisplay = (malScoreNum != null) ? malScoreNum.toFixed(2) : 'N/A';
+  // Score → pill
+  const s = (it?.score == null) ? '' : String(it.score).trim();
+  const scoreNum = (s !== '' && Number.isFinite(+s) && (+s > 0)) ? +s : null;
+  const ratingDisplay = (scoreNum != null) ? scoreNum.toFixed(2) : 'N/A';
 
-  const malId = String(it?.mal_id || '');
+  // Meta line like: "TV • Fall 2024"
+  const rawType = String(it?.type || '').trim();
+  let formatDisplay = 'N/A';
+  if (rawType) {
+    if (/^tv$/i.test(rawType)) formatDisplay = 'TV';
+    else if (/^ona$/i.test(rawType)) formatDisplay = 'ONA';
+    else if (/^ova$/i.test(rawType)) formatDisplay = 'OVA';
+    else if (/tv[\s-]*special/i.test(rawType)) formatDisplay = 'Special';
+    else formatDisplay = rawType.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  const premiered = String(it?.season || it?.aired?.string || '').trim() || 'N/A';
+  const metaLine = `${formatDisplay} • ${premiered}`;
 
   return `
-    <div class="browse-card" data-mal-id="${malId}">
-      <div class="browse-cover">
-        ${img ? `<img src="${img}" alt="">` : `<i class="fas fa-image"></i>`}
+    <div class="anime-card browse-anime-card" data-mal-id="${malId}">
+      <div class="card-image">
+        ${img ? `<img src="${img}" alt="${title}">` : '<i class="fas fa-image"></i>'}
       </div>
 
-      <div class="browse-info">
-        <div class="browse-title">${escapeHtml(title)}</div>
-        <div class="browse-divider"></div>
-
-        <div class="browse-meta">${escapeHtml(line1)}</div>
-        <div class="browse-meta browse-meta-2">${escapeHtml(line2)}</div>
-
-        <div class="browse-mal-score" aria-label="MAL score">
-          <span class="browse-mal-score-label">MAL</span>
-          <span class="browse-mal-score-value">${escapeHtml(ratingDisplay)}</span>
+      <div class="card-overlay">
+        <div class="card-rating-pill">${ratingDisplay}</div>
+        <div class="card-overlay-bottom">
+          <h3 class="card-overlay-title">${title}</h3>
+          <div class="card-overlay-meta">${metaLine}</div>
         </div>
       </div>
     </div>
   `;
 }
+
 
 
 
