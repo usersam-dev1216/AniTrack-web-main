@@ -9,7 +9,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#0f0f14" />
-    <title>Anime Tracker LIVE</title>
+    <title>AniTrack V11</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
@@ -21,31 +21,31 @@
     <header>
   <div class="list-header-shell">
 
-    <!-- LEFT: menu + logo -->
-    <div class="header-left">
-      <button id="sidebarToggle" class="hamburger" aria-label="Open menu" type="button">
-        <i class="fas fa-bars"></i>
+    <!-- LEFT: logo box + title/subtitle -->
+    <div class="header-left header-brand" role="button" tabindex="0" aria-label="Go to Home">
+      <i class="brand-logo-icon fa-solid fa-circle-play" aria-hidden="true"></i>
+
+      <div class="brand-text">
+        <div class="brand-title">AniTrack</div>
+        <div class="brand-subtitle">Discover • Track • Enjoy</div>
+      </div>
+    </div>
+
+    <!-- CENTER: main nav -->
+    <nav class="header-center-nav" aria-label="Primary navigation">
+      <button class="topnav-link" id="navHomeBtn" type="button">Home</button>
+      <button class="topnav-link" id="navBrowseBtn" type="button">Browse</button>
+      <button class="topnav-link" id="navListBtn" type="button">My List</button>
+      <button class="topnav-link" id="navStatsBtn" type="button">Statistics</button>
+      <button class="topnav-link" id="navSettingsBtn" type="button">Settings</button>
+    </nav>
+
+    <!-- RIGHT: profile icon -->
+    <div class="header-right">
+      <button id="navProfileBtn" class="profile-icon-btn" type="button" aria-label="Profile">
+        <i class="fas fa-user"></i>
       </button>
-
-      <div class="logo">
-        <i class="fas fa-play-circle"></i>
-        <span>AniTrack</span>
-      </div>
     </div>
-
-    <!-- CENTER -->
-    <div class="header-center">
-      <!-- Home-only top nav -->
-      <div class="header-center-nav" aria-label="Primary navigation">
-        <button class="topnav-link" id="navHomeBtn" type="button">Home</button>
-        <button class="topnav-link" id="navListBtn" type="button">My List</button>
-        <button class="topnav-link" id="navBrowseBtn" type="button">Browse</button>
-      </div>
-
-           <!-- List search moved above the grid -->
-    </div>
-
-
 
   </div>
 </header>
@@ -668,35 +668,36 @@
                             </div>
                         </div>
                     </section>
+                </div>
 
-                    <!-- RIGHT / SIDEBAR -->
-                    <aside class="detail-side">
-                        <div class="detail-panel">
-                            <div class="detail-panel-title">Information</div>
-                            <div class="detail-panel-body">
-                                <div class="detail-row"><span class="detail-label">Japanese:</span>  <span class="detail-value" id="entryDetailsInfoJapanese"></span></div>
-                                <div class="detail-row"><span class="detail-label">English:</span>   <span class="detail-value" id="entryDetailsInfoEnglish"></span></div>
-                                <div class="detail-row"><span class="detail-label">Status:</span>    <span class="detail-value" id="entryDetailsInfoStatus"></span></div>
-                                <div class="detail-row"><span class="detail-label">Aired:</span>     <span class="detail-value" id="entryDetailsInfoAired"></span></div>
-                                <div class="detail-row"><span class="detail-label">Broadcast:</span> <span class="detail-value" id="entryDetailsInfoBroadcast"></span></div>
-                                <div class="detail-row"><span class="detail-label">Producers:</span> <span class="detail-value" id="entryDetailsInfoProducers"></span></div>
-                                <div class="detail-row"><span class="detail-label">Licensors:</span> <span class="detail-value" id="entryDetailsInfoLicensors"></span></div>
-                                <div class="detail-row"><span class="detail-label">Studios:</span>   <span class="detail-value" id="entryDetailsInfoStudios"></span></div>
-                                <div class="detail-row"><span class="detail-label">Source:</span>    <span class="detail-value" id="entryDetailsInfoSource"></span></div>
-                                <div class="detail-row"><span class="detail-label">Rating:</span>    <span class="detail-value" id="entryDetailsInfoAgeRating"></span></div>
-                            </div>
+                <!-- INFORMATION + RELATIONS (after stats) -->
+                <div class="entrydetails-panels">
+                    <div class="detail-panel" id="entryDetailsInfoPanel">
+                        <div class="detail-panel-title">Information</div>
+                        <div class="detail-panel-body">
+                            <div class="detail-row"><span class="detail-label">Japanese</span><span class="detail-value" id="entryDetailsInfoJapanese"></span></div>
+                            <div class="detail-row"><span class="detail-label">English</span><span class="detail-value" id="entryDetailsInfoEnglish"></span></div>
+                            <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value" id="entryDetailsInfoStatus"></span></div>
+                            <div class="detail-row"><span class="detail-label">Aired</span><span class="detail-value" id="entryDetailsInfoAired"></span></div>
+                            <div class="detail-row"><span class="detail-label">Broadcast</span><span class="detail-value" id="entryDetailsInfoBroadcast"></span></div>
+                            <div class="detail-row"><span class="detail-label">Producers</span><span class="detail-value" id="entryDetailsInfoProducers"></span></div>
+                            <div class="detail-row"><span class="detail-label">Licensors</span><span class="detail-value" id="entryDetailsInfoLicensors"></span></div>
+                            <div class="detail-row"><span class="detail-label">Studios</span><span class="detail-value" id="entryDetailsInfoStudios"></span></div>
+                            <div class="detail-row"><span class="detail-label">Source</span><span class="detail-value" id="entryDetailsInfoSource"></span></div>
+                            <div class="detail-row"><span class="detail-label">Age rating</span><span class="detail-value" id="entryDetailsInfoAgeRating"></span></div>
                         </div>
+                    </div>
 
-                        <div class="detail-panel" id="entryDetailsRelationsPanel" style="display:none;">
-                            <div class="detail-panel-title">Relations</div>
-                            <div class="detail-panel-body">
-                                <ul class="relations-list" id="entryDetailsRelationsList"></ul>
-                            </div>
+                    <div class="detail-panel" id="entryDetailsRelationsPanel" style="display:none;">
+                        <div class="detail-panel-title">Relations</div>
+                        <div class="detail-panel-body">
+                            <ul class="relations-list" id="entryDetailsRelationsList"></ul>
                         </div>
-                    </aside>
+                    </div>
                 </div>
 
                 <!-- kept same structure (not modal-related) -->
+
                 
                 <div id="entryDetailsLinkedSwitchBar" class="linked-switch-bar" hidden>
                     <button id="entryDetailsPrevBtn" class="linked-switch-btn" aria-label="Previous linked entry">

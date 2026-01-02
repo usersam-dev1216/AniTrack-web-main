@@ -154,10 +154,13 @@ const userLoginView    = $('#userlogin');
 
 
 
-// Home nav buttons (header)
-const navHomeBtn = $('#navHomeBtn');
-const navListBtn = $('#navListBtn');
-const navBrowseBtn = $('#navBrowseBtn');
+// Header nav buttons
+const navHomeBtn     = $('#navHomeBtn');
+const navBrowseBtn   = $('#navBrowseBtn');
+const navListBtn     = $('#navListBtn');
+const navStatsBtn    = $('#navStatsBtn');
+const navSettingsBtn = $('#navSettingsBtn');
+const navProfileBtn  = $('#navProfileBtn');
 
 
 // Home rows
@@ -8377,6 +8380,13 @@ function applyRoute(){
   document.body.classList.toggle('route-account', isAccount);
   document.body.classList.toggle('route-profile', isProfile);
 
+  // Header active state
+  navHomeBtn?.classList.toggle('is-active', isHome);
+  navBrowseBtn?.classList.toggle('is-active', isBrowse);
+  navListBtn?.classList.toggle('is-active', isList);
+  navStatsBtn?.classList.toggle('is-active', isStatistics);
+  navSettingsBtn?.classList.toggle('is-active', isSettings);
+
   // If leaving EntryDetails, clear the body cover background
   if (!isEntryDetails) {
     document.body.removeAttribute('data-entrydetails-bg');
@@ -8404,18 +8414,29 @@ function applyRoute(){
 function initRouting(){
   window.addEventListener('hashchange', applyRoute);
 
-  // Home header nav buttons
+  // Header nav buttons
   navHomeBtn?.addEventListener('click', () => location.hash = '#home');
-  navListBtn?.addEventListener('click', () => location.hash = '#list');
   navBrowseBtn?.addEventListener('click', () => location.hash = '#browse');
+  navListBtn?.addEventListener('click', () => location.hash = '#list');
+  navStatsBtn?.addEventListener('click', () => location.hash = '#statistics');
+  navSettingsBtn?.addEventListener('click', () => location.hash = '#settings');
 
-  // optional: clicking the logo goes back home
-  document.querySelector('.logo')?.addEventListener('click', () => {
-    location.hash = '#home';
+  // Profile icon
+  navProfileBtn?.addEventListener('click', () => location.hash = '#profile');
+
+  // Clicking brand goes home (and works with keyboard)
+  const brand = document.querySelector('.header-brand');
+  brand?.addEventListener('click', () => location.hash = '#home');
+  brand?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      location.hash = '#home';
+    }
   });
 
   applyRoute();
 }
+
 
 
 // View mode (list sidebar)
