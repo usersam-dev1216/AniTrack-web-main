@@ -5685,10 +5685,7 @@ body.route-list .list-sidebar{
   display: flex;
   justify-content: center;
 }
-.auth-card{
-  width: min(520px, 100%);
-  padding: 10px 6px 0;
-}
+
 .auth-fields{
   display: flex;
   flex-direction: column;
@@ -5808,8 +5805,7 @@ body.route-list .list-sidebar{
 }
 
 .account-panel{
-  background: linear-gradient(45deg, #1d1d27, rgba(255,255,255,0));
-  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255, 255, 255, .05);
   border-radius: 14px;
   padding: 16px 16px 14px;
   margin: 14px 0;
@@ -6008,7 +6004,9 @@ body.route-list .list-sidebar{
 
 .auth-card{
   width: min(520px, 100%);
-  padding: 10px 6px 0;
+  padding: 20px 20px 20px;
+  background: rgba(255, 255, 255, .05);
+    border-radius: 10px;
 }
 
 .auth-fields{
