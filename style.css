@@ -953,9 +953,6 @@ color: var(--text-secondary);
   margin-top: 16px;
   border-radius: 18px;
   padding: 0;
- background: rgb(0 100 255 / 5%);
-  border: 1px solid rgba(255,255,255,.10);
-  box-shadow: 0 20px 70px rgba(0,0,0,.45);
   overflow: hidden;
 }
 
@@ -969,7 +966,7 @@ color: var(--text-secondary);
   gap: 12px;
   margin: 0;
   border-bottom: 1px solid rgba(255,255,255,.08);
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  
 }
 
 
