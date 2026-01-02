@@ -80,60 +80,24 @@ body::before, body::after {
   transform: translateZ(0);
 }
 
-/* EntryDetails: cover BG should NOT affect the header.
-   Paint it on the page container (below header), not on <body>. */
+/* EntryDetails: NO custom background anymore (keep global body/bg intact) */
 body.route-entrydetails[data-entrydetails-bg="1"]::before,
-body.route-entrydetails[data-entrydetails-bg="1"]::after {
+body.route-entrydetails[data-entrydetails-bg="1"]::after{
   content: none !important;
   display: none !important;
 }
 
-/* Ensure the page becomes its own stacking context */
+/* Hard-disable any EntryDetails background layers (even if the attribute exists) */
 body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page{
-  isolation: isolate;
+  isolation: auto;
 }
 
-/* Cover image blur layer */
-body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::before{
-  content: "";
-  position: absolute;
-  inset: -22px;
-  pointer-events: none;
-
-  background-image: var(--entrydetails-bg);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  filter: blur(40px);
-  opacity: 1;
-  transform: scale(1.08) translateZ(0);
-  z-index: 0;
-}
-
-/* Black overlay layer */
+body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::before,
 body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-
-  background: linear-gradient(
-    180deg,
-    rgba(0,0,0,.85) 0%,
-    rgba(0,0,0,.90) 55%,
-    rgba(0,0,0,.99) 100%
-  );
-  filter: none;
-  opacity: 1;
-  transform: translateZ(0);
-  z-index: 1;
+  content: none !important;
+  display: none !important;
 }
 
-/* Keep content above the overlay */
-body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page .detail-header{
-  position: relative;
-  z-index: 2;
-}
 
 
 /* Sidebar bottom auth (Login | Sign up) */
@@ -974,89 +938,116 @@ color: var(--text-secondary);
 
 /* ===================== HOME SECTIONS (Featured Today style) ===================== */
 .home-section{
-  margin-top: 18px;
-  border-radius: 22px;
-  padding: 16px 18px 10px;
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 18px 60px rgba(0,0,0,.45);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  margin-top: 16px;
+  border-radius: 18px;
+  padding: 0;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 20px 70px rgba(0,0,0,.45);
+  overflow: hidden;
 }
 
 .home-section:first-child{ margin-top: 0; }
 
 .home-section-head{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  margin: 2px 0 12px;
-  padding: 0 6px;
+  padding: 14px 16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  margin: 0;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
 }
 
+
+
 .home-section-title{
-  margin: 0;
-  font-size: .95rem;
-  font-weight: 800;
-  letter-spacing: .08em;
+  margin:0;
+  font-size: 14px;
+  letter-spacing:.25px;
+  font-weight: 900;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.88);
-  display: flex;
-  align-items: center;
+  color: rgba(255,255,255,.92);
+
+  display:flex;
+  align-items:center;
   gap: 10px;
-  white-space: nowrap;
+
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 .home-section-title::before{
-  content: "";
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
+  content:"";
+  width:10px;
+  height:10px;
+  border-radius:999px;
   background:
-    radial-gradient(circle at 30% 30%, rgba(154,230,255,0.95) 0%, rgba(154,230,255,0) 60%),
-    linear-gradient(180deg, rgba(139,92,246,0.95), rgba(59,130,246,0.75));
-  box-shadow:
-    0 0 0 3px rgba(255,255,255,0.06),
-    0 10px 20px rgba(0,0,0,0.35);
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,.85), transparent 60%),
+    linear-gradient(135deg, #6D7CFF, #22D3EE);
+  box-shadow: 0 0 0 6px rgba(109,124,255,.08);
+  flex:0 0 auto;
 }
 
-/* old divider line is not used in the new design */
-.home-section-line{ display: none; }
+
+/* Divider between Section 1 (title + filters) and Section 2 (cards + info) */
+.home-section-line{
+  display: block;
+  height: 1px;
+  width: 100%;
+  margin: 0 6px 12px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0),
+    rgba(255,255,255,0.16),
+    rgba(255,255,255,0)
+  );
+}
 
 /* right-side filters */
 .home-section-filters{
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px;
-  
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
 }
 
+
 .home-filter-chip{
-  appearance: none;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.04);
-  color: rgba(255,255,255,0.82);
+  appearance:none;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  color: rgba(234,240,255,.76);
+
+  font-size: 12px;
+  padding: 7px 10px;
   border-radius: 999px;
-  padding: 6px 12px;
-  font-size: .82rem;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
-  user-select: none;
+
+  cursor:pointer;
+  user-select:none;
+  white-space:nowrap;
+
+  transition: transform .15s ease, border-color .15s ease, background .15s ease;
 }
 
 .home-filter-chip:hover{
   transform: translateY(-1px);
-  border-color: rgba(139,92,246,0.40);
+  border-color: rgba(255,255,255,.16);
+  background: rgba(255,255,255,.07);
 }
 
+
 .home-filter-chip.active{
-  background: rgba(139,92,246,0.22);
-  border-color: rgba(139,92,246,0.55);
-  color: rgba(255,255,255,0.92);
+  border-color: rgba(34,211,238,.45);
+  background: rgba(34,211,238,.12);
+  color: rgba(255,255,255,.92);
 }
+
 
 /* Home row */
 .home-row-shell{
@@ -1064,16 +1055,23 @@ color: var(--text-secondary);
 }
 
 .home-row{
-  display: flex;
-  gap: 16px;
-  padding: 8px 8px 14px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  padding: 14px 16px 16px;
+  display:flex;
+  gap: 12px;
+
+  overflow-x:auto;
+  overflow-y:hidden;
+
   scroll-snap-type: x mandatory;
+  scroll-padding-left: 16px;
+  scroll-padding-right: 16px;
+
+  scroll-behavior:smooth;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   scrollbar-gutter: stable both-edges;
 }
+
 
 /* hide scrollbar completely (still scrollable via mouse/touch) */
 .home-row{
@@ -1132,20 +1130,112 @@ color: var(--text-secondary);
   opacity: .78;
 }
 
-/* loading placeholders (nice blank cards) */
-.home-skeleton{
-  flex: 0 0 240px;
-  height: 192px;
-  border-radius: 16px;
-  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.14), rgba(255,255,255,0.04) 55%, rgba(0,0,0,0.12) 100%);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow: 0 18px 55px rgba(0,0,0,.30);
+/* Home tiles — match sample.html “Currently Airing” */
+.home-row .anime-card{
+  width: 220px;
+  flex: 0 0 220px;
+  aspect-ratio: 1 / 1;
+  height: auto;
+
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  box-shadow: 0 16px 50px rgba(0,0,0,.45);
+  overflow:hidden;
+
+  scroll-snap-align: start;
+  transition: transform .15s ease, border-color .15s ease, background .15s ease;
 }
 
+.home-row .anime-card:hover{
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,.16);
+  background: rgba(0,0,0,.24);
+}
+
+.home-row .anime-card .home-tile-art{
+  height: 66.666%;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  position:relative;
+  overflow:hidden;
+
+  background:
+    radial-gradient(circle at 25% 25%, rgba(255,255,255,.30), transparent 55%),
+    linear-gradient(135deg, rgba(109,124,255,.30), rgba(34,211,238,.14));
+}
+
+.home-row .anime-card .home-tile-art::after{
+  content:"";
+  position:absolute;
+  inset:-45%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+  transform: rotate(25deg);
+  opacity:.40;
+  pointer-events:none;
+}
+
+.home-row .anime-card .home-tile-art img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+.home-row .anime-card .home-tile-body{
+  height: 33.333%;
+  padding: 10px;
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.home-row .anime-card .home-tile-title{
+  margin:0;
+  font-weight: 900;
+  font-size: 13px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.home-row .anime-card .home-tile-desc{
+  margin:0;
+  color: rgba(234,240,255,.70);
+  font-size: 12px;
+  line-height: 1.25;
+
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* keep visuals EXACT: hide optional overlays in the Home rail */
+.home-row .anime-card .bulk-check-card,
+.home-row .anime-card .card-favorite-heart{
+  display:none !important;
+}
+
+/* loading placeholders (nice blank cards) */
+.home-skeleton{
+  flex: 0 0 220px;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 25% 25%, rgba(255,255,255,.16), rgba(255,255,255,.05) 55%, rgba(0,0,0,.12) 100%),
+    linear-gradient(135deg, rgba(109,124,255,.22), rgba(34,211,238,.10));
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 16px 50px rgba(0,0,0,.30);
+}
+
+
 .home-empty-mini{
-  min-width: 240px;
-  height: 192px;
-  border-radius: 16px;
+  min-width: 220px;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  border-radius: 10px;
   border: 1px dashed rgba(255,255,255,0.18);
   display: grid;
   place-items: center;
@@ -1154,10 +1244,12 @@ color: var(--text-secondary);
   letter-spacing: .2px;
 }
 
+
 /* Home row nav arrows: hidden by default, appear on hover (keeps screenshot clean) */
-.home-row-shell[data-no-overflow="1"] .home-row-nav{
+.home-row-shell .home-row-nav{
   display: none;
 }
+
 
 .home-row-nav{
   position: absolute;
@@ -4955,8 +5047,12 @@ body.route-list header{
 #entryDetailsView.entrydetails-view {
   position: relative;
   z-index: 1;
+
+  /* Override global .view gutter shrink ONLY for EntryDetails */
+  width: min(var(--app-max), 100%);
+  margin: 0 auto;
   padding: 0;
-  margin: 0;
+
   overflow: visible;
   background: transparent;
 }
@@ -5036,7 +5132,6 @@ ease;
   z-index: 2;
   width: 100%;
   height: 100%;
-  padding: 50px 0 0;
   transform-origin: center;
   display: block;
 }

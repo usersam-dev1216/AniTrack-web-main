@@ -6811,30 +6811,21 @@ const valOrNA = (v) => {
   // Synopsis
   setText('entryDetailsSynopsis', valOrNA(a.description || a.synopsis || a.summary));
 
-  // --- DefaultBackground (EntryDetails) ---
+  // --- EntryDetails background ---
 const page = entryDetailsView.querySelector('.entrydetails-page') || entryDetailsView;
 
 try {
-  const cover = a?.image ? String(a.image) : '';
+  // No special EntryDetails BG anymore — keep global body intact
+  document.body.removeAttribute('data-entrydetails-bg');
+  document.body.style.removeProperty('--entrydetails-bg');
 
-  page.classList.toggle('has-bg', !!cover);
-
-  // BODY draws the entry cover background (blur + overlay in CSS)
-  if (cover && cover.trim()) {
-    document.body.setAttribute('data-entrydetails-bg', '1');
-    document.body.style.setProperty('--entrydetails-bg', `url("${cover}")`);
-  } else {
-    document.body.removeAttribute('data-entrydetails-bg');
-    document.body.style.removeProperty('--entrydetails-bg');
-  }
-
-  // Keep the page container itself transparent
+  page.classList.remove('has-bg');
   page.style.backgroundImage = '';
   page.removeAttribute('data-bg-blur');
   page.style.removeProperty('--default-bg-blur');
 
 } catch (err) {
-  console.warn('EntryDetails background skipped:', err);
+  console.warn('EntryDetails background cleanup skipped:', err);
 }
 
 
@@ -7260,31 +7251,26 @@ function renderBrowseHomeSkeleton() {
     <div class="home-section">
       <div class="home-section-head">
         <h2 class="home-section-title">Most Popular</h2>
-        <div class="home-section-line"></div>
       </div>
+      <div class="home-section-line"></div>
       ${skel()}
     </div>
 
-<div class="home-section">
+    <div class="home-section">
       <div class="home-section-head">
         <h2 class="home-section-title">Top Airing</h2>
-        <div class="home-section-line"></div>
       </div>
+      <div class="home-section-line"></div>
       ${skel()}
     </div>
-
 
     <div class="home-section">
       <div class="home-section-head">
         <h2 class="home-section-title">Upcoming</h2>
-        <div class="home-section-line"></div>
       </div>
+      <div class="home-section-line"></div>
       ${skel()}
     </div>
-
-    
-
-
   `;
 }
 
@@ -7306,8 +7292,8 @@ function renderBrowseHomeFromData({ upcoming = [], topAiring = [], mostPopular =
     <div class="home-section">
       <div class="home-section-head">
         <h2 class="home-section-title">${escapeHtml(title)}</h2>
-        <div class="home-section-line"></div>
       </div>
+      <div class="home-section-line"></div>
       ${items && items.length
         ? `<div class="browse-results-grid">${(items || []).map(renderBrowseCardHTML).join('')}</div>`
         : `
