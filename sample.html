@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AniTrack — Home</title>
+  <style>
+    :root{
+      --bg0:#060812;
+      --bg1:#0B1020;
+      --text:#EAF0FF;
+      --muted: rgba(234,240,255,.70);
+      --muted2: rgba(234,240,255,.52);
+
+      --card: rgba(255,255,255,.06);
+      --stroke: rgba(255,255,255,.12);
+
+      --brand:#6D7CFF;
+      --brand2:#22D3EE;
+
+      --shadow: 0 22px 80px rgba(0,0,0,.58);
+      --shadow2: 0 16px 50px rgba(0,0,0,.45);
+      --radius: 18px;
+      --radius2: 22px;
+      --max: 1240px;
+
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 15% 12%, rgba(109,124,255,.34), transparent 60%),
+        radial-gradient(900px 600px at 82% 18%, rgba(34,211,238,.20), transparent 58%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow-x:hidden;
+    }
+
+    /* subtle grid + grain */
+    body:before{
+      content:"";
+      position:fixed;
+      inset:0;
+      background:
+        linear-gradient(to right, rgba(255,255,255,.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,.06) 1px, transparent 1px);
+      background-size: 58px 58px;
+      opacity:.08;
+      pointer-events:none;
+      mask-image: radial-gradient(900px 700px at 50% 10%, #000 40%, transparent 70%);
+    }
+    body:after{
+      content:"";
+      position:fixed;
+      inset:-30%;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.3'/%3E%3C/svg%3E");
+      opacity:.06;
+      pointer-events:none;
+      mix-blend-mode: overlay;
+      animation: drift 10s linear infinite;
+    }
+    @keyframes drift { from{ transform:translate3d(0,0,0);} to{ transform:translate3d(120px,80px,0);} }
+
+    a{ color:inherit; text-decoration:none; }
+    button{ font: inherit; color: inherit; }
+
+    .wrap{ max-width: var(--max); margin: 0 auto; padding: 18px 18px 70px; }
+
+    /* HEADER */
+    .header{
+      position:sticky;
+      top:0;
+      z-index:40;
+      margin: 14px auto 18px;
+      padding: 12px;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: linear-gradient(180deg, rgba(10,14,26,.86), rgba(10,14,26,.56));
+      backdrop-filter: blur(16px);
+      box-shadow: 0 10px 40px rgba(0,0,0,.35);
+    }
+    .header-inner{
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap: 10px;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 6px 8px;
+      border-radius: 16px;
+      width: fit-content;
+    }
+    .logo{
+      width:36px; height:36px; border-radius: 14px;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,.75), transparent 45%),
+        linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow: 0 10px 24px rgba(109,124,255,.28);
+      border: 1px solid rgba(255,255,255,.18);
+    }
+    .brand-title{ display:flex; flex-direction:column; line-height:1; }
+    .brand-title b{ font-size: 15px; letter-spacing: .4px; font-weight: 860; }
+    .brand-title span{ font-size: 11px; color: var(--muted2); margin-top: 3px; letter-spacing:.3px; }
+
+    .nav{
+      display:flex;
+      gap: 8px;
+      justify-content:center;
+      align-items:center;
+      padding: 4px 0;
+      overflow:auto;
+      scrollbar-width:none;
+    }
+    .nav::-webkit-scrollbar{ display:none; }
+
+    .pill{
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      color: rgba(234,240,255,.84);
+      font-size: 13px;
+      white-space:nowrap;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .pill:hover{ transform: translateY(-1px); background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); }
+    .pill.active{
+      background: linear-gradient(135deg, rgba(109,124,255,.26), rgba(34,211,238,.18));
+      border-color: rgba(109,124,255,.48);
+      color: rgba(255,255,255,.92);
+    }
+
+    .right{ display:flex; justify-content:flex-end; align-items:center; gap: 10px; }
+    .icon-btn{
+      width: 42px; height: 42px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05);
+      display:inline-grid; place-items:center;
+      cursor:pointer;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+    .icon-btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.18); }
+    .account{
+      width: 36px; height: 36px; border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.14);
+      background:
+        radial-gradient(circle at 35% 30%, rgba(255,255,255,.85), transparent 40%),
+        linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.04));
+      box-shadow: 0 16px 50px rgba(0,0,0,.35);
+    }
+
+    /* SECTIONS */
+    main{ display:grid; gap: 16px; }
+
+    .card{
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: 0 20px 70px rgba(0,0,0,.45);
+      overflow:hidden;
+    }
+
+    /* Section header style like your example */
+    .section-head{
+      padding: 14px 16px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+    }
+    .section-title{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width:0;
+    }
+    .dot{
+      width:10px; height:10px; border-radius:999px;
+      background:
+        radial-gradient(circle at 30% 30%, rgba(255,255,255,.85), transparent 60%),
+        linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow: 0 0 0 6px rgba(109,124,255,.08);
+      flex:0 0 auto;
+    }
+    .section-title h2{
+      margin:0;
+      font-size: 14px;
+      letter-spacing:.25px;
+      font-weight: 900;
+      text-transform: uppercase;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .filters{
+      display:flex;
+      align-items:center;
+      gap: 6px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .f{
+      font-size: 12px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      color: rgba(234,240,255,.76);
+      cursor:pointer;
+      user-select:none;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+      white-space:nowrap;
+    }
+    .f:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.07); }
+    .f.active{ border-color: rgba(34,211,238,.45); background: rgba(34,211,238,.12); color: rgba(255,255,255,.92); }
+
+    /* Custom neat scrollbar for horizontal rails */
+  .scroll-x{
+  /* more “breathing room” */
+  padding: 14px 16px 16px;
+  display:flex;
+  gap: 12px;
+
+  overflow-x:auto;
+  overflow-y:hidden;
+
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 16px;
+  scroll-padding-right: 16px;
+
+  scroll-behavior:smooth;
+  -webkit-overflow-scrolling: touch;
+
+  /* neat scrollbar */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255,255,255,.26) rgba(255,255,255,.06);
+}
+
+.scroll-x::-webkit-scrollbar{ height: 10px; }
+.scroll-x::-webkit-scrollbar-track{
+  background: rgba(255,255,255,.06);
+  border-radius: 999px;
+  margin: 0 12px; /* makes it look inset + clean */
+  border: 1px solid rgba(255,255,255,.08);
+}
+.scroll-x::-webkit-scrollbar-thumb{
+  background: linear-gradient(90deg, rgba(109,124,255,.80), rgba(34,211,238,.72));
+  border-radius: 999px;
+
+  /* gives a “pill” thumb effect */
+  border: 2px solid rgba(10,14,26,.60);
+  box-shadow: 0 10px 24px rgba(0,0,0,.35);
+}
+.scroll-x::-webkit-scrollbar-thumb:hover{
+  background: linear-gradient(90deg, rgba(109,124,255,.95), rgba(34,211,238,.86));
+}
+
+
+    /* WebKit scrollbar styling (Chromium/Safari) */
+    .scroll-x::-webkit-scrollbar{ height: 10px; }
+    .scroll-x::-webkit-scrollbar-track{
+      background: rgba(255,255,255,.06);
+      border-radius: 999px;
+      margin: 0 10px; /* makes it look “floating” */
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .scroll-x::-webkit-scrollbar-thumb{
+      background: linear-gradient(90deg, rgba(109,124,255,.75), rgba(34,211,238,.70));
+      border-radius: 999px;
+      border: 2px solid rgba(10,14,26,.55); /* makes it “neat” */
+      box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    }
+    .scroll-x::-webkit-scrollbar-thumb:hover{
+      background: linear-gradient(90deg, rgba(109,124,255,.92), rgba(34,211,238,.85));
+    }
+
+
+
+    .tile{
+  /* square tile */
+  width: 220px;
+  flex: 0 0 220px; /* keeps it fixed in the scroll row */
+  aspect-ratio: 1 / 1;
+
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  box-shadow: var(--shadow2);
+  overflow:hidden;
+
+  scroll-snap-align: start;
+  transition: transform .15s ease, border-color .15s ease, background .15s ease;
+}
+
+    .tile:hover{ transform: translateY(-2px); border-color: rgba(255,255,255,.16); background: rgba(0,0,0,.24); }
+ .art{
+  /* top image area = 2/3 of the square */
+  height: 66.666%;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+
+  /* placeholder "cover" look */
+  background:
+    radial-gradient(circle at 25% 25%, rgba(255,255,255,.30), transparent 55%),
+    linear-gradient(135deg, rgba(109,124,255,.30), rgba(34,211,238,.14));
+  position:relative;
+  overflow:hidden;
+}
+
+    .art:after{
+      content:"";
+      position:absolute;
+      inset:-45%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+      transform: rotate(25deg);
+      opacity:.40;
+    }
+    .tile .body{
+  height: 33.333%;
+  padding: 10px;
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+  min-height: 0;
+}
+    .tile .t{
+      margin:0; font-weight: 900; font-size: 13px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .tile .d{
+  margin:0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-line-clamp: 2;     /* 2 lines max */
+  -webkit-box-orient: vertical;
+}
+
+  
+
+    /* FEED (blank) */
+    .blank{
+      padding: 26px 16px;
+      display:grid;
+      place-items:center;
+      min-height: 180px;
+      text-align:center;
+    }
+    .ghost{
+      width: min(820px, 100%);
+      border-radius: 22px;
+      border: 1px dashed rgba(255,255,255,.16);
+      background: rgba(0,0,0,.14);
+      padding: 18px;
+      color: rgba(234,240,255,.78);
+    }
+    .ghost .hint{ margin-top:8px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+    /* FOOTER */
+    footer{
+      margin-top: 22px;
+      padding: 14px 2px 0;
+      color: rgba(234,240,255,.62);
+      font-size: 12px;
+      display:flex;
+      justify-content:space-between;
+      gap: 12px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .foot-left{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .tagf{
+      font-family: var(--mono);
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+      padding: 6px 10px;
+      border-radius: 999px;
+      color: rgba(234,240,255,.75);
+    }
+    .foot-links{ display:flex; gap: 8px; flex-wrap:wrap; justify-content:flex-end; }
+    .foot-links a{
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+    }
+    .foot-links a:hover{ border-color: rgba(255,255,255,.18); background: rgba(255,255,255,.06); }
+
+    @media (max-width: 900px){
+      .header-inner{ grid-template-columns: 1fr; }
+      .nav{ justify-content:flex-start; }
+      .right{ justify-content:flex-start; }
+      .scroll-hint:before,.scroll-hint:after{ display:none; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="#">
+          <div class="logo" aria-hidden="true"></div>
+          <div class="brand-title">
+            <b>AniTrack</b>
+            <span>Discover • Track • Enjoy</span>
+          </div>
+        </a>
+
+        <nav class="nav" aria-label="Primary navigation">
+          <a class="pill active" href="#">Home</a>
+          <a class="pill" href="#">Browse</a>
+          <a class="pill" href="#">My List</a>
+          <a class="pill" href="#">Schedule</a>
+          <a class="pill" href="#">Settings</a>
+        </nav>
+
+        <div class="right">
+          <button class="icon-btn" type="button" aria-label="Account">
+            <div class="account" aria-hidden="true"></div>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- FEED TAB (blank) -->
+      <section class="card" aria-label="Feed">
+        <div class="section-head">
+          <div class="section-title"><span class="dot"></span><h2>Feed</h2></div>
+          <div class="filters"><span class="f active">Blank</span></div>
+        </div>
+        <div class="blank">
+          <div class="ghost">
+            <div style="font-weight:900; letter-spacing:.2px;">Feed content goes here</div>
+            <div class="hint">Leaving this area empty for now (as requested).</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FEATURED: 5 SEPARATE SECTIONS -->
+      <!-- 1) Currently Airing -->
+      <section class="card" aria-label="Currently Airing">
+        <div class="section-head">
+          <div class="section-title"><span class="dot"></span><h2>Currently Airing</h2></div>
+          <div class="filters" aria-label="Filters">
+            <span class="f active">All</span><span class="f">TV</span><span class="f">Movies</span><span class="f">OVA</span><span class="f">ONA</span><span class="f">Other</span>
+          </div>
+        </div>
+        <div class="scroll-hint">
+          <div class="scroll-x">
+            <!-- 15 demo entries -->
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Neon Rift: Zero Protocol</p><p class="d">TV • Summer 2015</p></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Witch Courier Club</p><p class="d">TV • Spring 2022</p></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Crimson Blade</p><p class="d">TV • Spring 2021</p></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Moonlit Bakery BR</p><p class="d">TV • Spring 2022</p></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Ocean City Detectives</p><p class="d">TV • Spring 2022</p></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Skyline Samurai</p><p class="d">Urban sword fights • stylish cuts.</p></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Star Harbor Academy</p><p class="d">School drama • new rival appears.</p></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Railgun Sonata</p><p class="d">Sci-fi concert arc • OP is fire.</p><div class="meta"><span>Ep 6</span><span>Wed</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Kappa Street Fighters</p><p class="d">Comedy brawls • tournament begins.</p><div class="meta"><span>Ep 3</span><span>Sat</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Night Drive Exorcists</p><p class="d">Highway hauntings • new artifact.</p><div class="meta"><span>Ep 2</span><span>Thu</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Mecha Gardeners</p><p class="d">Greenhouse war • hidden mech bay.</p><div class="meta"><span>Ep 11</span><span>Fri</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Glitch Idol Project</p><p class="d">Idols & cyberpunk • live show arc.</p><div class="meta"><span>Ep 9</span><span>Sat</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Frostbyte Rangers</p><p class="d">Arctic missions • boss fight soon.</p><div class="meta"><span>Ep 7</span><span>Sun</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Paper Crown</p><p class="d">Court drama • secret identity reveal.</p><div class="meta"><span>Ep 6</span><span>Mon</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Ghost Notes</p><p class="d">Music mystery • vinyl clue decoded.</p><div class="meta"><span>Ep 10</span><span>Tue</span></div></div></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2) Top Rated -->
+      <section class="card" aria-label="Top Rated">
+        <div class="section-head">
+          <div class="section-title"><span class="dot"></span><h2>Top Rated</h2></div>
+          <div class="filters">
+            <span class="f active">All</span><span class="f">TV</span><span class="f">Movies</span><span class="f">OVA</span><span class="f">ONA</span><span class="f">Other</span>
+          </div>
+        </div>
+        <div class="scroll-hint">
+          <div class="scroll-x">
+            <!-- 15 demo entries -->
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Ghost Notes: Vinyl Arc</p><p class="d">Critic + fan favorite • masterpiece vibes.</p><div class="meta"><span>9.1</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Sky Lantern City</p><p class="d">Festival romance • art direction flex.</p><div class="meta"><span>8.9</span><span>Movie</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Paper Crown</p><p class="d">Court intrigue • writing is sharp.</p><div class="meta"><span>8.8</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Crimson Blade: Dawn Oath</p><p class="d">Satisfying action • cinematic cuts.</p><div class="meta"><span>8.7</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Neon Rift</p><p class="d">Cyberpunk thriller • strong OST.</p><div class="meta"><span>8.8</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Arcade Spirits: Extra Life</p><p class="d">Comedy • absurd but heartfelt.</p><div class="meta"><span>8.6</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Starglass Symphony</p><p class="d">Music drama • emotional arcs.</p><div class="meta"><span>8.7</span><span>OVA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Iron Coast Voyagers</p><p class="d">Adventure • worldbuilding heavy.</p><div class="meta"><span>8.5</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Midnight Library</p><p class="d">Mystery • perfect pacing.</p><div class="meta"><span>8.9</span><span>ONA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Snowfield Reverie</p><p class="d">Cozy • top-tier atmosphere.</p><div class="meta"><span>8.6</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Violet Circuit</p><p class="d">Sci-fi • style + substance.</p><div class="meta"><span>8.8</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Golem & Petals</p><p class="d">Fantasy • character-driven.</p><div class="meta"><span>8.5</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Blue Hour Detective</p><p class="d">Noir • smart cases.</p><div class="meta"><span>8.7</span><span>ONA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Orbiting Hearts</p><p class="d">Romance • beautiful visuals.</p><div class="meta"><span>8.6</span><span>Movie</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Thunder Kite Zero</p><p class="d">Action • tight choreography.</p><div class="meta"><span>8.5</span><span>TV</span></div></div></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3) Upcoming -->
+      <section class="card" aria-label="Upcoming">
+        <div class="section-head">
+          <div class="section-title"><span class="dot"></span><h2>Upcoming</h2></div>
+          <div class="filters">
+            <span class="f active">All</span><span class="f">TV</span><span class="f">Movies</span><span class="f">OVA</span><span class="f">ONA</span><span class="f">Other</span>
+          </div>
+        </div>
+        <div class="scroll-hint">
+          <div class="scroll-x">
+            <!-- 15 demo entries -->
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Frostline Rangers</p><p class="d">Arctic ruins • teaser + release window.</p><div class="meta"><span>Q2</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Night Drive Exorcists</p><p class="d">Urban legends • new key visual.</p><div class="meta"><span>Soon</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Mecha Gardeners: Bloom Protocol</p><p class="d">Greenhouse war • PV incoming.</p><div class="meta"><span>2026</span><span>ONA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Saffron Skies</p><p class="d">Romance • first teaser announced.</p><div class="meta"><span>Fall</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Crater City Runners</p><p class="d">Sci-fi • cast reveal soon.</p><div class="meta"><span>Spring</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Paper Crown (Movie Cut)</p><p class="d">Director’s cut • theaters.</p><div class="meta"><span>Aug</span><span>Movie</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Lantern Witch OVA</p><p class="d">Special episode • bonus story.</p><div class="meta"><span>OVA</span><span>July</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Orbit Choir</p><p class="d">Music • studio reveal placeholder.</p><div class="meta"><span>Q3</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Cobalt Myth</p><p class="d">Fantasy • key art coming.</p><div class="meta"><span>TBA</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Gadget Monk</p><p class="d">Comedy • trailer soon.</p><div class="meta"><span>ONA</span><span>TBA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Moonlit Alley Tales</p><p class="d">Mystery • announcement placeholder.</p><div class="meta"><span>Winter</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Tideglass Knights</p><p class="d">Adventure • staff lineup teased.</p><div class="meta"><span>Q4</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Zero Day Idol</p><p class="d">Cyber idols • debut PV.</p><div class="meta"><span>ONA</span><span>May</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Velvet Meteor</p><p class="d">Sci-fi drama • teaser art.</p><div class="meta"><span>Movie</span><span>TBA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Sunset Dojo</p><p class="d">Martial arts • trailer soon.</p><div class="meta"><span>TV</span><span>June</span></div></div></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4) Last Season -->
+      <section class="card" aria-label="Last Season">
+        <div class="section-head">
+          <div class="section-title"><span class="dot"></span><h2>Last Season</h2></div>
+          <div class="filters">
+            <span class="f active">All</span><span class="f">TV</span><span class="f">Movies</span><span class="f">OVA</span><span class="f">ONA</span><span class="f">Other</span>
+          </div>
+        </div>
+        <div class="scroll-hint">
+          <div class="scroll-x">
+            <!-- 15 demo entries -->
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Ocean City Detectives</p><p class="d">Season highlight • finale arc.</p><div class="meta"><span>Finale</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Arcade Spirits: Extra Life</p><p class="d">Comedy • fan favorite.</p><div class="meta"><span>Hit</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Shadow Atlas</p><p class="d">Mystery • sleeper pick.</p><div class="meta"><span>8.4</span><span>ONA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Blue Maple Days</p><p class="d">Slice of life • cozy vibes.</p><div class="meta"><span>8.2</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Iron Coast Voyagers</p><p class="d">Adventure • big world.</p><div class="meta"><span>8.5</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Golem & Petals</p><p class="d">Fantasy • heartfelt.</p><div class="meta"><span>8.5</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Midnight Library</p><p class="d">Mystery • perfect pacing.</p><div class="meta"><span>8.9</span><span>ONA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Citrus Choir</p><p class="d">Music • warm finale.</p><div class="meta"><span>8.1</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Thunder Kite Zero</p><p class="d">Action • strong fights.</p><div class="meta"><span>8.5</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Neon Neko Nights</p><p class="d">Comedy • city chaos.</p><div class="meta"><span>7.9</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Quartz Witch</p><p class="d">Fantasy • lore drop.</p><div class="meta"><span>8.0</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Violet Circuit</p><p class="d">Sci-fi • stylish.</p><div class="meta"><span>8.8</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Orbiting Hearts</p><p class="d">Romance • gorgeous.</p><div class="meta"><span>8.6</span><span>Movie</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Garden Ghost OVA</p><p class="d">Special • bonus story.</p><div class="meta"><span>OVA</span><span>8.1</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Kite Runner Zero</p><p class="d">Short • tight pacing.</p><div class="meta"><span>ONA</span><span>8.0</span></div></div></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5) Newly Added -->
+      <section class="card" aria-label="Newly Added">
+        <div class="section-head">
+          <div class="section-title"><span class="dot"></span><h2>Newly Added</h2></div>
+          <div class="filters">
+            <span class="f active">All</span><span class="f">TV</span><span class="f">Movies</span><span class="f">OVA</span><span class="f">ONA</span><span class="f">Other</span>
+          </div>
+        </div>
+        <div class="scroll-hint">
+          <div class="scroll-x">
+            <!-- 15 demo entries -->
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Starlight Diner Stories</p><p class="d">New catalog entry • just added.</p><div class="meta"><span>Today</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Moonlit Alley Tales</p><p class="d">Newly indexed • fresh entry.</p><div class="meta"><span>New</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Lantern Runner OVA</p><p class="d">Special • bonus episode.</p><div class="meta"><span>OVA</span><span>New</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Gadget Monk</p><p class="d">ONA short • new listing.</p><div class="meta"><span>ONA</span><span>Week</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Sunset Dojo</p><p class="d">TV • added this week.</p><div class="meta"><span>Week</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Orbit Choir</p><p class="d">Music • added recently.</p><div class="meta"><span>New</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Velvet Meteor</p><p class="d">Movie • newly added.</p><div class="meta"><span>Movie</span><span>New</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Blue Hour Detective</p><p class="d">ONA • added today.</p><div class="meta"><span>Today</span><span>ONA</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Snowfield Reverie</p><p class="d">TV • new entry.</p><div class="meta"><span>New</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Cobalt Myth</p><p class="d">TV • catalog update.</p><div class="meta"><span>Update</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Tideglass Knights</p><p class="d">TV • new listing.</p><div class="meta"><span>New</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Neon Neko Nights</p><p class="d">TV • added this week.</p><div class="meta"><span>Week</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Citrus Choir</p><p class="d">TV • fresh add.</p><div class="meta"><span>New</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Quartz Witch</p><p class="d">TV • newly indexed.</p><div class="meta"><span>New</span><span>TV</span></div></div></article>
+            <article class="tile"><div class="art"></div><div class="body"><p class="t">Iron Coast Voyagers</p><p class="d">TV • catalog refresh.</p><div class="meta"><span>Update</span><span>TV</span></div></div></article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+      <div class="foot-left">
+        <span class="tagf">AniTrack UI</span>
+        <span>© 2026 AniTrack. All rights reserved.</span>
+      </div>
+      <div class="foot-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Cookies</a>
+        <a href="#">Support</a>
+        <a href="#">About</a>
+      </div>
+    </footer>
+
+  </div>
+</body>
+</html>

@@ -87,7 +87,15 @@
     <section class="home-section">
         <div class="home-section-head">
             <h2 class="home-section-title">Currently Airing</h2>
-            <div class="home-section-line"></div>
+
+            <div class="home-section-filters" role="tablist" aria-label="Format filter">
+                <button class="home-filter-chip active" type="button" data-format="all">All</button>
+                <button class="home-filter-chip" type="button" data-format="TV">TV</button>
+                <button class="home-filter-chip" type="button" data-format="Movie">Movies</button>
+                <button class="home-filter-chip" type="button" data-format="OVA">OVA</button>
+                <button class="home-filter-chip" type="button" data-format="ONA">ONA</button>
+                <button class="home-filter-chip" type="button" data-format="Other">Other</button>
+            </div>
         </div>
         <div class="home-row-shell">
   <button class="home-row-nav prev" type="button" aria-label="Previous">
@@ -106,7 +114,15 @@
     <section class="home-section">
         <div class="home-section-head">
             <h2 class="home-section-title">Most Popular</h2>
-            <div class="home-section-line"></div>
+
+            <div class="home-section-filters" role="tablist" aria-label="Format filter">
+                <button class="home-filter-chip active" type="button" data-format="all">All</button>
+                <button class="home-filter-chip" type="button" data-format="TV">TV</button>
+                <button class="home-filter-chip" type="button" data-format="Movie">Movies</button>
+                <button class="home-filter-chip" type="button" data-format="OVA">OVA</button>
+                <button class="home-filter-chip" type="button" data-format="ONA">ONA</button>
+                <button class="home-filter-chip" type="button" data-format="Other">Other</button>
+            </div>
         </div>
         <div class="home-row-shell">
   <button class="home-row-nav prev" type="button" aria-label="Previous">
@@ -124,7 +140,15 @@
     <section class="home-section">
         <div class="home-section-head">
             <h2 class="home-section-title">Upcoming Next</h2>
-            <div class="home-section-line"></div>
+
+            <div class="home-section-filters" role="tablist" aria-label="Format filter">
+                <button class="home-filter-chip active" type="button" data-format="all">All</button>
+                <button class="home-filter-chip" type="button" data-format="TV">TV</button>
+                <button class="home-filter-chip" type="button" data-format="Movie">Movies</button>
+                <button class="home-filter-chip" type="button" data-format="OVA">OVA</button>
+                <button class="home-filter-chip" type="button" data-format="ONA">ONA</button>
+                <button class="home-filter-chip" type="button" data-format="Other">Other</button>
+            </div>
         </div>
         <div class="home-row-shell">
   <button class="home-row-nav prev" type="button" aria-label="Previous">
@@ -142,7 +166,15 @@
     <section class="home-section">
         <div class="home-section-head">
             <h2 class="home-section-title">This Year's Tops</h2>
-            <div class="home-section-line"></div>
+
+            <div class="home-section-filters" role="tablist" aria-label="Format filter">
+                <button class="home-filter-chip active" type="button" data-format="all">All</button>
+                <button class="home-filter-chip" type="button" data-format="TV">TV</button>
+                <button class="home-filter-chip" type="button" data-format="Movie">Movies</button>
+                <button class="home-filter-chip" type="button" data-format="OVA">OVA</button>
+                <button class="home-filter-chip" type="button" data-format="ONA">ONA</button>
+                <button class="home-filter-chip" type="button" data-format="Other">Other</button>
+            </div>
         </div>
         <div class="home-row-shell">
   <button class="home-row-nav prev" type="button" aria-label="Previous">
@@ -160,7 +192,15 @@
     <section class="home-section">
         <div class="home-section-head">
             <h2 class="home-section-title">Last Season's Tops</h2>
-            <div class="home-section-line"></div>
+
+            <div class="home-section-filters" role="tablist" aria-label="Format filter">
+                <button class="home-filter-chip active" type="button" data-format="all">All</button>
+                <button class="home-filter-chip" type="button" data-format="TV">TV</button>
+                <button class="home-filter-chip" type="button" data-format="Movie">Movies</button>
+                <button class="home-filter-chip" type="button" data-format="OVA">OVA</button>
+                <button class="home-filter-chip" type="button" data-format="ONA">ONA</button>
+                <button class="home-filter-chip" type="button" data-format="Other">Other</button>
+            </div>
         </div>
         <div class="home-row-shell">
   <button class="home-row-nav prev" type="button" aria-label="Previous">
@@ -286,13 +326,28 @@
         </div>
 
         <!-- Results -->
-        <div id="browseResultsShell" class="browse-results-shell">
-          <div class="empty-state">
-            <i class="fas fa-search"></i>
-            <h2>Search MyAnimeList</h2>
-            <p>Type a title to start browsing.</p>
-          </div>
-        </div>
+        <section class="home-section browse-home-shell">
+  <div class="home-section-head">
+    <h2 class="home-section-title">Currently Airing</h2>
+
+    <div class="home-section-filters" role="tablist" aria-label="Format filter">
+      <button class="home-filter-chip active" type="button" data-format="all">All</button>
+      <button class="home-filter-chip" type="button" data-format="TV">TV</button>
+      <button class="home-filter-chip" type="button" data-format="Movie">Movies</button>
+      <button class="home-filter-chip" type="button" data-format="OVA">OVA</button>
+      <button class="home-filter-chip" type="button" data-format="ONA">ONA</button>
+      <button class="home-filter-chip" type="button" data-format="Other">Other</button>
+    </div>
+  </div>
+
+  <div id="browseResultsShell" class="browse-results-shell">
+    <div class="empty-state">
+      <i class="fas fa-search"></i>
+      <h2>Search MyAnimeList</h2>
+      <p>Type a title to start browsing.</p>
+    </div>
+  </div>
+</section>
 
     </main>
 

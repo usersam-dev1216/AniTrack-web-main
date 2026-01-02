@@ -2390,23 +2390,103 @@ function __updateHomeRowNavFor(rowEl){
   shell.__rowNavUpdate?.();
 }
 
-function fillHomeRow(rowEl, list, limit = 14){
-  if (!rowEl) return;
+function __homeFormatKey(anime){
+  const seasons = Array.isArray(anime?.seasons) ? anime.seasons : [];
+  const raw = String(anime?.subtitle || seasons[0]?.format || '').trim();
+
+  if (!raw) return 'Other';
+  if (/^tv$/i.test(raw)) return 'TV';
+  if (/^ona$/i.test(raw)) return 'ONA';
+  if (/^ova$/i.test(raw)) return 'OVA';
+  if (/^movie$/i.test(raw) || /^movies$/i.test(raw)) return 'Movie';
+  return 'Other';
+}
+
+function __getHomeActiveFormat(sectionEl){
+  const btn = sectionEl?.querySelector?.('.home-filter-chip.active');
+  return String(btn?.dataset?.format || 'all').trim() || 'all';
+}
+
+function __renderHomeRowCards(rowEl, items, opts = {}){
+  const { filtered = false, formatLabel = '' } = opts || {};
   rowEl.innerHTML = '';
 
-  const sliced = (list || []).slice(0, limit);
-  if (!sliced.length) {
-    rowEl.innerHTML = `<div class="empty-state" style="min-width:260px;">
-      <i class="fas fa-film"></i>
-      <h2 style="margin:8px 0 0;">Nothing here yet</h2>
-      <p style="margin:6px 0 0;">Add entries to see this section populate.</p>
-    </div>`;
+  const limit = Number(rowEl.__homeLimit ?? 1000) || 1000;
+  const sliced = (items || []).slice(0, limit);
+
+  // 1) Not loaded yet / empty list => show “blank cards” placeholders
+  if (!filtered && (!items || items.length === 0)) {
+    for (let i = 0; i < 6; i++) {
+      const sk = document.createElement('div');
+      sk.className = 'home-skeleton';
+      rowEl.appendChild(sk);
+    }
+    __updateHomeRowNavFor(rowEl);
+    return;
+  }
+
+  // 2) Filter applied but nothing matches
+  if (filtered && sliced.length === 0) {
+    const box = document.createElement('div');
+    box.className = 'home-empty-mini';
+    box.textContent = formatLabel ? `No ${formatLabel} here` : 'No matches';
+    rowEl.appendChild(box);
     __updateHomeRowNavFor(rowEl);
     return;
   }
 
   sliced.forEach(a => rowEl.appendChild(buildCardForHome(a)));
   __updateHomeRowNavFor(rowEl);
+}
+
+function __applyHomeSectionFilter(rowEl){
+  if (!rowEl) return;
+
+  const section = rowEl.closest?.('.home-section');
+  const fmt = __getHomeActiveFormat(section);
+
+  const full = Array.isArray(rowEl.__homeFullList) ? rowEl.__homeFullList : [];
+  let filtered = full;
+  let isFiltered = false;
+
+  if (fmt && fmt !== 'all') {
+    isFiltered = true;
+    filtered = full.filter(a => __homeFormatKey(a) === fmt);
+  }
+
+  __renderHomeRowCards(rowEl, filtered, {
+    filtered: isFiltered,
+    formatLabel: (fmt === 'Movie') ? 'Movies' : fmt
+  });
+}
+
+function fillHomeRow(rowEl, list, limit = 14){
+  if (!rowEl) return;
+
+  rowEl.__homeFullList = Array.isArray(list) ? list.slice() : [];
+  rowEl.__homeLimit = limit;
+
+  __applyHomeSectionFilter(rowEl);
+}
+
+function __initHomeSectionFilters(){
+  document.querySelectorAll('.home-section').forEach((sec) => {
+    const filters = sec.querySelector('.home-section-filters');
+    if (!filters || filters.__wired) return;
+    filters.__wired = true;
+
+    filters.addEventListener('click', (e) => {
+      const btn = e.target.closest('.home-filter-chip');
+      if (!btn) return;
+
+      filters.querySelectorAll('.home-filter-chip').forEach(b => {
+        b.classList.toggle('active', b === btn);
+      });
+
+      const row = sec.querySelector('.home-row');
+      if (row) __applyHomeSectionFilter(row);
+    });
+  });
 }
 
 // Spotlight state (kept stable between renders)
@@ -8372,6 +8452,7 @@ function init() {
   setupEventListeners();
   initAuth();
   __initHomeRowNav();
+  __initHomeSectionFilters();
 
   syncViewModeBtn();
   syncListSidebarViewBtn();
