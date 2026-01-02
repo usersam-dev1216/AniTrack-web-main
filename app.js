@@ -162,6 +162,11 @@ const navStatsBtn    = $('#navStatsBtn');
 const navSettingsBtn = $('#navSettingsBtn');
 const navProfileBtn  = $('#navProfileBtn');
 
+// Header profile meta (username + 2 links beside the icon)
+const headerProfileTitle = $('#headerProfileTitle');
+const headerProfileLink1 = $('#headerProfileLink1');
+const headerProfileLink2 = $('#headerProfileLink2');
+
 
 // Home rows
 const homeTopAiringRow      = $('#homeTopAiringRow');
@@ -400,6 +405,7 @@ function syncAuthUI() {
   const u = __authUser || getCachedAuthUser();
   const logged = !!u;
 
+  // ----- Sidebar auth UI -----
   if (sbAuthGuest) sbAuthGuest.hidden = logged;
   if (sbAuthUser) sbAuthUser.hidden = !logged;
 
@@ -409,6 +415,23 @@ function syncAuthUI() {
   } else {
     if (sbUserName) sbUserName.textContent = '—';
     if (sbUserEmail) sbUserEmail.textContent = '';
+  }
+
+  // ----- Header profile UI (this was missing) -----
+  if (headerProfileTitle) {
+    headerProfileTitle.textContent = logged
+      ? (u.username || u.email || 'User')
+      : 'Guest';
+  }
+
+  if (headerProfileLink1) {
+    headerProfileLink1.textContent = logged ? 'Profile' : 'Login';
+    headerProfileLink1.setAttribute('href', logged ? '#profile' : '#userlogin');
+  }
+
+  if (headerProfileLink2) {
+    headerProfileLink2.textContent = logged ? 'Account' : 'Sign up';
+    headerProfileLink2.setAttribute('href', logged ? '#account' : '#usersignup');
   }
 
   syncAccountFields();
@@ -8364,8 +8387,23 @@ function initRouting(){
   navStatsBtn?.addEventListener('click', () => location.hash = '#statistics');
   navSettingsBtn?.addEventListener('click', () => location.hash = '#settings');
 
-  // Profile icon
-  navProfileBtn?.addEventListener('click', () => location.hash = '#profile');
+  // Profile icon (if not logged in, go login)
+  navProfileBtn?.addEventListener('click', () => {
+    location.hash = isUserLoggedIn() ? '#profile' : '#userlogin';
+  });
+
+  // Header profile links beside the icon (force correct hash + stop bubbling)
+  headerProfileLink1?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    location.hash = isUserLoggedIn() ? '#profile' : '#userlogin';
+  });
+
+  headerProfileLink2?.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    location.hash = isUserLoggedIn() ? '#account' : '#usersignup';
+  });
 
   // Clicking brand goes home (and works with keyboard)
   const brand = document.querySelector('.header-brand');
