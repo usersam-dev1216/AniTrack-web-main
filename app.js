@@ -2185,13 +2185,13 @@ function __getMalIdFromEntry(entry) {
 
 async function __listApi(path, options = {}) {
   if (!LIST_API_BASE || LIST_API_BASE.includes('YOURNAME')) {
-    // Don’t hard-crash; just no-op until you set the real URL.
     return { ok: false, error: 'list_api_base_not_set' };
   }
 
-  const res = await fetch(`${LIST_API_BASE}${path}`, {
-    credentials: 'include',
-    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+  // IMPORTANT: userlist worker is Bearer-JWT protected.
+  // Use the existing listFetch() which mints JWT via /auth/list-token.
+  const res = await listFetch(path, {
+    headers: { ...(options.headers || {}) },
     ...options,
   });
 
