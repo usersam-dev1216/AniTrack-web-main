@@ -298,15 +298,17 @@ async function getListJwt({ force = false } = {}) {
   return __listJwt;
 }
 
-async function listFetch(path, init = {}) {
+window.__listFetchJwt = async function listFetch(path, init = {}) {
   const token = await getListJwt();
-  const headers = {
-    "content-type": "application/json",
-    ...(init.headers || {}),
-    Authorization: `Bearer ${token}`,
-  };
+const headers = {
+  "content-type": "application/json",
+  ...(init.headers || {}),
+  "Authorization": `Bearer ${token}`,
+};
 
-  let res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers });
+let res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers });
+// NOTE: no credentials needed for Bearer JWT
+
 
   // If token expired, refresh once and retry
   if (res.status === 401) {
@@ -435,9 +437,10 @@ function authFetch(path, init = {}) {
   return fetch(`${AUTH_API_BASE}${path}`, {
     ...init,
     headers,
-    credentials: "include", // IMPORTANT: sends/receives the cookie session
+    credentials: "include", // sends/receives cookie session
   });
 }
+
 
 
 function setAuthError(el, msg) {
@@ -495,16 +498,11 @@ function syncAccountFields() {
   if (em) em.value = u?.email || '';
 }
 
+// IMPORTANT: do not redefine listFetch again later.
+// This wrapper keeps older code paths working without switching auth methods.
 async function listFetch(path, init = {}) {
-  const url = LIST_API_BASE + path;
-  return fetch(url, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      ...(init.headers || {}),
-      'content-type': 'application/json',
-    },
-  });
+  // assumes the JWT/Bearer-based listFetch earlier in the file is the real one
+  return window.__listFetchJwt(path, init);
 }
 
 // Loads MAL IDs from cloud and makes sure your local "animeList" contains those IDs.
