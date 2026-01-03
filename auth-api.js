@@ -282,22 +282,27 @@ return ok(
 
     // --------------------
     // AUTH: LOGIN
-    // POST /auth/login  { email, password }
+    // POST /auth/login  { identifier, password }   // identifier = email OR username
     // --------------------
     if (request.method === "POST" && url.pathname === "/auth/login") {
       const body = await request.json().catch(() => null);
       if (!body) return bad("invalid_json", 400, cors);
 
-      const email = normalizeEmail(body.email);
+      const identifier = String(body.identifier || "").trim();
       const password = String(body.password || "");
-      if (!email || !password) return bad("missing_fields", 400, cors);
+      if (!identifier || !password) return bad("missing_fields", 400, cors);
 
-      const created = await env.DB.prepare(
-  `SELECT id, email, username FROM users WHERE email = ?`
-).bind(email).first();
+      const isEmail = identifier.includes("@");
+      const email = isEmail ? normalizeEmail(identifier) : null;
+      const username = isEmail ? null : identifier;
 
+      const user = await env.DB.prepare(
+        isEmail
+          ? `SELECT id, email, username, pass_hash FROM users WHERE email = ?`
+          : `SELECT id, email, username, pass_hash FROM users WHERE username = ?`
+      ).bind(isEmail ? email : username).first();
 
-      // do not reveal whether email exists
+      // do not reveal whether identifier exists
       if (!user) return bad("invalid_credentials", 401, cors);
 
       const okPass = await verifyPassword(password, user.pass_hash);
@@ -310,9 +315,43 @@ return ok(
       const setCookie = makeCookie(cookieName, `${sess.sid}.${sess.secret}`, SESSION_DAYS * 24 * 60 * 60);
 
       return ok(
-        { user: { id: userId, email: user.email } },
+        { user: { id: userId, email: user.email, username: user.username } },
         { ...cors, "Set-Cookie": setCookie }
       );
+    }
+
+    // --------------------
+    // AUTH: UPDATE USERNAME
+    // POST /auth/username  { username }
+    // --------------------
+    if (request.method === "POST" && url.pathname === "/auth/username") {
+      const userId = await requireUser(env, request);
+      if (!userId) return bad("not_logged_in", 401, cors);
+
+      const body = await request.json().catch(() => null);
+      if (!body) return bad("invalid_json", 400, cors);
+
+      const username = String(body.username || "").trim();
+
+      if (!username) return bad("missing_username", 400, cors);
+      if (username.length < 3 || username.length > 24) return bad("invalid_username_length", 400, cors);
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) return bad("invalid_username_chars", 400, cors);
+
+      const existingUser = await env.DB.prepare(
+        `SELECT id FROM users WHERE username = ? AND id != ?`
+      ).bind(username, userId).first();
+
+      if (existingUser) return bad("username_in_use", 409, cors);
+
+      await env.DB.prepare(
+        `UPDATE users SET username = ? WHERE id = ?`
+      ).bind(username, userId).run();
+
+      const user = await env.DB.prepare(
+        `SELECT id, email, username, created_at FROM users WHERE id = ?`
+      ).bind(userId).first();
+
+      return ok({ user }, cors);
     }
 
     // --------------------
