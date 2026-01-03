@@ -6465,7 +6465,9 @@ body.route-settings .header-shell{
   z-index: 9;
 }
 
-body.is-logged-in .anime-card:hover .card-quick-add{
+/* Show "+" on hover for everyone (guest mode supported) */
+.anime-card:hover .card-quick-add,
+.anime-card:focus-within .card-quick-add{
   opacity:1;
   transform: translateY(0);
   pointer-events:auto;
@@ -6619,4 +6621,36 @@ body.is-logged-in .anime-card:hover .card-quick-add{
 .userentry-modal.is-guest .userentry-fields *,
 .userentry-modal.is-guest .userentry-notes *{
   pointer-events:none;
+}
+
+
+
+/* Right-click "List edit" menu (cards + browse cards) */
+#listEditContextMenu.list-edit-menu{
+  position: fixed;
+  z-index: 9999;
+  min-width: 170px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(31,31,50,.96), rgba(23,23,37,.96));
+  box-shadow: 0 18px 46px rgba(0,0,0,.55);
+  backdrop-filter: blur(10px);
+}
+
+#listEditContextMenu .list-edit-menu-item{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255,255,255,.90);
+  cursor: pointer;
+}
+
+#listEditContextMenu .list-edit-menu-item:hover{
+  background: rgba(255,255,255,.08);
 }

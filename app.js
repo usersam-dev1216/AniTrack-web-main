@@ -340,6 +340,13 @@ function isUserLoggedIn() {
   return !!(__authUser || getCachedAuthUser());
 }
 
+// Always show the "+" on cards (guest mode supported)
+function quickAddBtnHTML(malId) {
+  const id = malId ?? '';
+  const guest = !isUserLoggedIn();
+  return `<button class="card-quick-add${guest ? ' is-guest' : ''}" type="button" data-mal-id="${id}" aria-label="Add/Edit entry" title="Add/Edit">+</button>`;
+}
+
 function authUrl(path) {
   return `${AUTH_API_BASE}${path}`;
 }
@@ -700,20 +707,8 @@ async function deleteUserEntryModal(){
   if (!browseView?.hidden) renderBrowseHome?.();
 }
 
-/* Global click handling for + on ALL cards (Home/List cards) */
+/* Global click handling (modal buttons only) */
 document.addEventListener('click', (e) => {
-  const plus = e.target.closest('.card-quick-add');
-  if (plus) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // ✅ allow opening modal while logged out (guest mode)
-
-    const mid = plus.getAttribute('data-mal-id') || plus.closest('.anime-card')?.getAttribute('data-mal-id') || '';
-    if (mid) openUserEntryModalFromMalId(mid);
-    return;
-  }
-
   if (e.target?.id === 'ueSaveBtn') { e.preventDefault(); saveUserEntryModal(); }
   if (e.target?.id === 'ueDeleteBtn') { e.preventDefault(); deleteUserEntryModal(); }
   if (e.target?.id === 'userEntryCloseBtn') { e.preventDefault(); closeUserEntryModal(); }
@@ -2660,32 +2655,26 @@ renderHomePage();
 
 
        const card = document.createElement('div');
-    card.className = 'anime-card';
-    card.dataset.id = anime.id;
-    
-     card.innerHTML = `
-      <div class="card-context">
-        <div class="context-menu">
-          <button class="context-option" data-action="edit"><i class="fas fa-edit"></i> Edit</button>
-          <button class="context-option" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
-        </div>
-      </div>
+card.className = 'anime-card';
+card.dataset.id = anime.id;
 
-      ${isUserLoggedIn() ? `<button class="card-quick-add" type="button" data-mal-id="${anime?.malId ?? ''}" aria-label="Add/Edit entry" title="Add/Edit">+</button>` : ''}
+// store mal id directly on the card for right-click → "List edit"
+const mid = getNumericMalIdFromEntry(anime) || anime?.malId || anime?.mal_id || '';
+if (mid) card.setAttribute('data-mal-id', String(mid));
 
-      <div class="card-image">
-        ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
-      </div>
-      <div class="card-overlay">
-        <div class="card-rating-pill">${ratingDisplay}</div>
-        ${anime.isFavorite ? '<div class="card-favorite-heart">⭐</div>' : ''}
-        <div class="card-overlay-bottom">
-          <h3 class="card-overlay-title">
-            ${anime.title}
-          </h3>
-          <div class="card-overlay-meta">${metaLine}</div>
-        </div>
-      </div>`;
+card.innerHTML = `
+  <div class="card-image">
+    ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
+  </div>
+  <div class="card-overlay">
+    <div class="card-rating-pill">${ratingDisplay}</div>
+    ${anime.isFavorite ? '<div class="card-favorite-heart">⭐</div>' : ''}
+    <div class="card-overlay-bottom">
+      <h3 class="card-overlay-title">${anime.title}</h3>
+      <div class="card-overlay-meta">${metaLine}</div>
+    </div>
+  </div>`;
+
 
 
 
@@ -2759,40 +2748,31 @@ function buildCardForHome(anime){
   const metaLine = `${formatDisplay} • ${premiered}`;
 
   const card = document.createElement('div');
-  card.className = 'anime-card';
-  card.dataset.id = anime.id;
+card.className = 'anime-card';
+card.dataset.id = anime.id;
 
-  // EXACT same markup as your list grid cards
-    card.innerHTML = `
-    <div class="card-context">
-      <div class="context-menu">
-        <button class="context-option" data-action="edit"><i class="fas fa-edit"></i> Edit</button>
-        <button class="context-option" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
-      </div>
-    </div>
+const mid = getNumericMalIdFromEntry(anime) || anime?.malId || anime?.mal_id || '';
+if (mid) card.setAttribute('data-mal-id', String(mid));
 
-    ${isUserLoggedIn() ? `<button class="card-quick-add" type="button" data-mal-id="${anime?.malId ?? ''}" aria-label="Add/Edit entry" title="Add/Edit">+</button>` : ''}
-
-    <div class="card-image">
-      ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
-    </div>
-    <div class="card-overlay">
-      <div class="card-rating-pill">${ratingDisplay}</div>
+card.innerHTML = `
+  <div class="card-image">
+    ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
+  </div>
+  <div class="card-overlay">
+    <div class="card-rating-pill">${ratingDisplay}</div>
 ${isBulkMode ? `
   <label class="bulk-check bulk-check-card">
     <input class="bulk-checkbox" type="checkbox" data-bulk-check="${anime.id}" ${bulkSelected.has(String(anime.id)) ? 'checked' : ''} aria-label="Select entry">
   </label>
 ` : ''}
 
-${anime.isFavorite ? 
-'<div class="card-favorite-heart">⭐</div>' : ''}
-        <div class="card-overlay-bottom">
-          <h3 class="card-overlay-title">
-            ${anime.title}
-          </h3>
-          <div class="card-overlay-meta">${metaLine}</div>
-        </div>
-      </div>`;
+${anime.isFavorite ? '<div class="card-favorite-heart">⭐</div>' : ''}
+    <div class="card-overlay-bottom">
+      <h3 class="card-overlay-title">${anime.title}</h3>
+      <div class="card-overlay-meta">${metaLine}</div>
+    </div>
+  </div>`;
+
 
 
   __ensureMalScoreForPill(anime, card.querySelector('.card-rating-pill'));
@@ -3835,10 +3815,11 @@ function renderAnimeList() {
     return n>0 ? n : 'N/A';
   };
   const firstDuration = (seasons=[]) => (seasons[0]?.duration || 'N/A');
-  const bestUserRating = (seasons=[]) => {
-    const v = seasons.map(s=>+s.rating||0).filter(n=>n>0);
-    return v.length ? Math.max(...v).toFixed(1) : 'N/A';
-  };
+const bestUserRating = (seasons = []) => {
+  const v = seasons.map(s => +s.rating || 0).filter(n => n > 0);
+  return v.length ? Math.max(...v).toFixed(1) : 'N/A';
+};
+
 
   const durMin = (x) => {
     x = String(x||'').trim(); if (!x || x==='N/A') return null;
@@ -6935,7 +6916,7 @@ deleteAnimeBtn?.addEventListener('click', () => {
   // Clicks (existing behaviors)
   animeGrid.addEventListener('click', (e) => {
     // ✅ Let the global "+" handler open the User Entry modal
-    if (e.target.closest('.card-quick-add')) return;
+    
 
     const card = e.target.closest('.anime-card');
     const row  = e.target.closest('.anime-row');
@@ -6975,22 +6956,103 @@ deleteAnimeBtn?.addEventListener('click', () => {
 
 
 
+let __listEditMenuEl = null;
+let __listEditMenuMid = '';
+
+function ensureListEditMenu(){
+  if (__listEditMenuEl) return __listEditMenuEl;
+
+  const el = document.createElement('div');
+  el.id = 'listEditContextMenu';
+  el.className = 'list-edit-menu';
+  el.hidden = true;
+  el.innerHTML = `
+    <button type="button" class="list-edit-menu-item" data-action="list-edit">
+      <i class="fas fa-pen-to-square"></i>
+      <span>List edit</span>
+    </button>
+  `;
+  document.body.appendChild(el);
+
+  // click on option
+  el.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="list-edit"]');
+    if (!btn) return;
+    hideListEditMenu();
+    if (__listEditMenuMid) openUserEntryModalFromMalId(__listEditMenuMid);
+  });
+
+  // outside click closes
+  document.addEventListener('click', (e) => {
+    if (!__listEditMenuEl || __listEditMenuEl.hidden) return;
+    if (e.target.closest('#listEditContextMenu')) return;
+    hideListEditMenu();
+  });
+
+  // escape closes
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideListEditMenu();
+  });
+
+  __listEditMenuEl = el;
+  return el;
+}
+
+function showListEditMenu(malId, x, y){
+  const el = ensureListEditMenu();
+  __listEditMenuMid = String(malId || '');
+
+  // clamp to viewport
+  const pad = 8;
+  el.hidden = false;
+  el.style.left = '0px';
+  el.style.top = '0px';
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  // after unhide, measure
+  const r = el.getBoundingClientRect();
+  const left = Math.max(pad, Math.min(x, vw - r.width - pad));
+  const top  = Math.max(pad, Math.min(y, vh - r.height - pad));
+
+  el.style.left = left + 'px';
+  el.style.top  = top + 'px';
+}
+
+function hideListEditMenu(){
+  if (!__listEditMenuEl) return;
+  __listEditMenuEl.hidden = true;
+  __listEditMenuMid = '';
+}
 
 
   // NEW: Right-click context menu (cards + list rows)
-  animeGrid.addEventListener('contextmenu', (e) => {
-    const target = e.target.closest('.anime-card, .anime-row');
-    if (!target) return;
+// NEW: Right-click context menu
+// - Cards: show a tiny menu with "List edit" → opens the Add/Edit entry modal
+// - List rows: keep the existing entry context menu
+animeGrid.addEventListener('contextmenu', (e) => {
+  const card = e.target.closest('.anime-card');
+  if (card) {
     e.preventDefault();
-    const id = target.getAttribute('data-id');
-    // LIST MODE + card grid → 4 options (edit / reposition / fav / delete)
+    const mid = card.getAttribute('data-mal-id') || '';
+    if (mid) showListEditMenu(mid, e.clientX, e.clientY);
+    return;
+  }
+
+  const row = e.target.closest('.anime-row');
+  if (row) {
+    e.preventDefault();
+    const id = row.getAttribute('data-id');
     showEntryContextMenu(id, e.clientX, e.clientY, 'list');
-  });
+  }
+});
+
 
 // ===== HOME cards: same click + contextmenu behavior as animeGrid =====
 homeView?.addEventListener('click', (e) => {
   // ✅ Let the global "+" handler open the User Entry modal
-  if (e.target.closest('.card-quick-add')) return;
+  
 
   const card = e.target.closest('.anime-card');
   const openBtn = e.target.closest('[data-open]');
@@ -7877,34 +7939,27 @@ function initBrowseSearch() {
   if (!initBrowseSearch.__boundClicks) {
     initBrowseSearch.__boundClicks = true;
 
-    shell.addEventListener('click', (e) => {
-      // If the user clicked the "+" button, open the Add/Edit entry modal (logged-in only)
-      const addBtn = e.target.closest('.browse-add-btn, .card-quick-add');
-      if (addBtn) {
-        e.preventDefault();
-        e.stopPropagation();
+shell.addEventListener('click', (e) => {
+  // Normal click on a browse card opens EntryDetails
+  const card = e.target.closest('.browse-anime-card');
+  if (!card) return;
 
-           // ✅ allow opening modal while logged out (guest mode)
+  const malId = card.getAttribute('data-mal-id');
+  if (!malId) return;
 
+  e.preventDefault();
+  openEntryDetailsMAL(malId);
+});
 
-        const malId =
-          addBtn.getAttribute('data-mal-id') ||
-          addBtn.closest('.browse-anime-card, .anime-card')?.getAttribute('data-mal-id');
+// Right-click on browse cards => "List edit" menu
+shell.addEventListener('contextmenu', (e) => {
+  const card = e.target.closest('.browse-anime-card');
+  if (!card) return;
+  e.preventDefault();
+  const malId = card.getAttribute('data-mal-id') || '';
+  if (malId) showListEditMenu(malId, e.clientX, e.clientY);
+});
 
-        if (malId) openUserEntryModalFromMalId(malId);
-        return;
-      }
-
-      // Normal click on a browse card opens EntryDetails
-      const card = e.target.closest('.browse-anime-card');
-      if (!card) return;
-
-      const malId = card.getAttribute('data-mal-id');
-      if (!malId) return;
-
-      e.preventDefault();
-      openEntryDetailsMAL(malId);
-    });
 
   }
 
@@ -8076,7 +8131,7 @@ function renderBrowseCardHTML(it){
 
   return `
     <div class="anime-card browse-anime-card" data-mal-id="${malId}">
-      ${isUserLoggedIn() ? `<button class="card-quick-add" type="button" data-mal-id="${malId}" aria-label="Add/Edit entry" title="Add/Edit">+</button>` : ''}
+      ${quickAddBtnHTML(malId)}
 
       <div class="card-image">
         ${img ? `<img src="${img}" alt="${title}">` : '<i class="fas fa-image"></i>'}
@@ -8213,13 +8268,6 @@ async function jikanFetchTopAiring({ limit = 12, signal } = {}) {
 async function jikanFetchMostPopular({ limit = 12, signal } = {}) {
   const url = malApiUrl(
     `/api/ranking?type=bypopularity&limit=${encodeURIComponent(limit)}&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
-  );
-  return jikanFetchList(url, { signal });
-}
-
-async function jikanFetchTopAll({ limit = 12, signal } = {}) {
-  const url = malApiUrl(
-    `/api/ranking?type=all&limit=${encodeURIComponent(limit)}&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
   );
   return jikanFetchList(url, { signal });
 }
