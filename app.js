@@ -6908,6 +6908,9 @@ deleteAnimeBtn?.addEventListener('click', () => {
   // ===== Grid (cards + list rows) =====
   // Clicks (existing behaviors)
   animeGrid.addEventListener('click', (e) => {
+    // ✅ Let the global "+" handler open the User Entry modal
+    if (e.target.closest('.card-quick-add')) return;
+
     const card = e.target.closest('.anime-card');
     const row  = e.target.closest('.anime-row');
     const openBtn = e.target.closest('[data-open]');
@@ -6960,6 +6963,9 @@ deleteAnimeBtn?.addEventListener('click', () => {
 
 // ===== HOME cards: same click + contextmenu behavior as animeGrid =====
 homeView?.addEventListener('click', (e) => {
+  // ✅ Let the global "+" handler open the User Entry modal
+  if (e.target.closest('.card-quick-add')) return;
+
   const card = e.target.closest('.anime-card');
   const openBtn = e.target.closest('[data-open]');
   if (!card && !openBtn) return;
@@ -6980,8 +6986,7 @@ homeView?.addEventListener('click', (e) => {
     return;
   }
 
-  if (!e.target.closest('.context-menu'))  openEntryDetails(id, 'home');
-
+  if (!e.target.closest('.context-menu')) openEntryDetails(id, 'home');
 });
 
 homeView?.addEventListener('contextmenu', (e) => {
