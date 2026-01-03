@@ -340,12 +340,9 @@ function isUserLoggedIn() {
   return !!(__authUser || getCachedAuthUser());
 }
 
-// Always show the "+" on cards (guest mode supported)
-function quickAddBtnHTML(malId) {
-  const id = malId ?? '';
-  const guest = !isUserLoggedIn();
-  return `<button class="card-quick-add${guest ? ' is-guest' : ''}" type="button" data-mal-id="${id}" aria-label="Add/Edit entry" title="Add/Edit">+</button>`;
-}
+// (removed) quick add button feature (modal postponed)
+function quickAddBtnHTML() { return ''; }
+
 
 function authUrl(path) {
   return `${AUTH_API_BASE}${path}`;
@@ -707,22 +704,81 @@ async function deleteUserEntryModal(){
   if (!browseView?.hidden) renderBrowseHome?.();
 }
 
-/* Global click handling (modal buttons only) */
-document.addEventListener('click', (e) => {
-  if (e.target?.id === 'ueSaveBtn') { e.preventDefault(); saveUserEntryModal(); }
-  if (e.target?.id === 'ueDeleteBtn') { e.preventDefault(); deleteUserEntryModal(); }
-  if (e.target?.id === 'userEntryCloseBtn') { e.preventDefault(); closeUserEntryModal(); }
 
-  const modal = e.target.closest('#userEntryModal');
-  if (modal && e.target === modal) closeUserEntryModal();
-});
 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    const modal = __getEl('userEntryModal');
-    if (modal?.classList.contains('active')) closeUserEntryModal();
-  }
-});
+/* =========================
+   Right-click menu: "List edit" (Home/List/Browse cards)
+   ========================= */
+let __listEditMenuEl = null;
+let __listEditMenuMalId = null;
+
+function __ensureListEditMenu(){
+  if (__listEditMenuEl) return __listEditMenuEl;
+
+  const el = document.createElement('div');
+  el.id = 'listEditContextMenu';
+  el.className = 'list-edit-menu';
+  el.hidden = true;
+  el.innerHTML = `
+    <button type="button" class="list-edit-item" data-action="list-edit">
+      <i class="fas fa-pen-to-square"></i>
+      <span>List edit</span>
+    </button>
+  `;
+  document.body.appendChild(el);
+
+  el.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="list-edit"]');
+    if (!btn) return;
+    e.preventDefault();
+    __hideListEditMenu();
+    if (__listEditMenuMalId) openUserEntryModalFromMalId(__listEditMenuMalId);
+  });
+
+  // close on outside click
+  document.addEventListener('click', (e) => {
+    if (!__listEditMenuEl || __listEditMenuEl.hidden) return;
+    if (e.target.closest('#listEditContextMenu')) return;
+    __hideListEditMenu();
+  });
+
+  // close on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') __hideListEditMenu();
+  });
+
+  __listEditMenuEl = el;
+  return el;
+}
+
+function __showListEditMenu(malId, x, y){
+  const el = __ensureListEditMenu();
+  __listEditMenuMalId = String(malId || '');
+  if (!__listEditMenuMalId) return;
+
+  el.hidden = false;
+
+  // clamp to viewport
+  const pad = 8;
+  el.style.left = '0px';
+  el.style.top = '0px';
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const r = el.getBoundingClientRect();
+
+  const left = Math.max(pad, Math.min(x, vw - r.width - pad));
+  const top  = Math.max(pad, Math.min(y, vh - r.height - pad));
+
+  el.style.left = left + 'px';
+  el.style.top  = top + 'px';
+}
+
+function __hideListEditMenu(){
+  if (!__listEditMenuEl) return;
+  __listEditMenuEl.hidden = true;
+  __listEditMenuMalId = null;
+}
 
 
 function syncAuthUI() {
@@ -2812,207 +2868,9 @@ function __getTotalEpisodesFromAnime(a){
   return 0;
 }
 
-function __openUserEntryModal(anime){
-  if (!isUserLoggedIn()) return; // hard rule
 
-  const modal = document.getElementById('userEntryModal');
-  if (!modal) return;
 
-  __ueActiveAnime = anime;
 
-  const cover = document.getElementById('userEntryCoverImg');
-  const malId = __getMalIdFromAnime(anime);
-
-  // cover
-  if (cover){
-    const src = String(anime?.image || '').trim();
-    if (src) {
-      cover.src = src;
-      cover.style.opacity = '1';
-    } else {
-      cover.removeAttribute('src');
-      cover.style.opacity = '0.25';
-    }
-  }
-
-  // get cached entry if we have it
-  const entry = (malId && __cloudListByMal.get(+malId)) ? __cloudListByMal.get(+malId) : null;
-
-  const statusEl = document.getElementById('ueStatus');
-  const scoreEl  = document.getElementById('ueScore');
-  const startEl  = document.getElementById('ueStartDate');
-  const finishEl = document.getElementById('ueFinishDate');
-  const notesEl  = document.getElementById('ueNotes');
-  const favEl    = document.getElementById('ueFavorite');
-  const reEl     = document.getElementById('ueRewatches');
-  const clEl     = document.getElementById('ueCustomList');
-  const epWEl    = document.getElementById('ueEpWatched');
-  const epTEl    = document.getElementById('ueEpTotal');
-
-  const totalEps = __getTotalEpisodesFromAnime(anime);
-  if (epTEl) epTEl.textContent = String(totalEps ?? 0);
-
-  // Fill values (defaults if new)
-  if (statusEl) statusEl.value = entry?.status ?? '';
-  if (scoreEl)  scoreEl.value  = String(entry?.score ?? 0);
-  if (startEl)  startEl.value  = entry?.start_date ? String(entry.start_date).slice(0,10) : '';
-  if (finishEl) finishEl.value = entry?.finish_date ? String(entry.finish_date).slice(0,10) : '';
-  if (notesEl)  notesEl.value  = entry?.notes ?? '';
-  if (favEl)    favEl.checked  = !!(entry?.is_favorite);
-  if (reEl)     reEl.value     = String(entry?.rewatches ?? 0);
-  if (clEl)     clEl.value     = entry?.custom_list ?? '';
-  if (epWEl)    epWEl.value    = String(entry?.ep_watched ?? 0);
-
-  // clamp episodes watched
-  if (epWEl){
-    epWEl.max = String(totalEps ?? 0);
-    const v = +epWEl.value;
-    if (Number.isFinite(v) && totalEps > 0 && v > totalEps) epWEl.value = String(totalEps);
-    if (!Number.isFinite(v) || v < 0) epWEl.value = '0';
-  }
-
-  // open
-  modal.classList.remove('closing');
-  modal.classList.add('active');
-  modal.setAttribute('aria-hidden','false');
-}
-
-function __closeUserEntryModal(){
-  const modal = document.getElementById('userEntryModal');
-  if (!modal) return;
-  modal.classList.add('closing');
-  setTimeout(() => {
-    modal.classList.remove('active','closing');
-    modal.setAttribute('aria-hidden','true');
-    __ueActiveAnime = null;
-  }, 260);
-}
-
-async function __saveUserEntry(){
-  if (!isUserLoggedIn()) return;
-
-  const anime = __ueActiveAnime;
-  if (!anime) return;
-
-  const malId = __getMalIdFromAnime(anime);
-  if (!malId) { showNotification?.('Missing MAL ID'); return; }
-
-  const payload = {
-    mal_id: +malId,
-    status: document.getElementById('ueStatus')?.value || '',
-    score: +((document.getElementById('ueScore')?.value) ?? 0),
-    start_date: document.getElementById('ueStartDate')?.value || null,
-    finish_date: document.getElementById('ueFinishDate')?.value || null,
-    notes: document.getElementById('ueNotes')?.value || '',
-    is_favorite: !!document.getElementById('ueFavorite')?.checked,
-    rewatches: +((document.getElementById('ueRewatches')?.value) ?? 0),
-    custom_list: document.getElementById('ueCustomList')?.value || '',
-    ep_watched: +((document.getElementById('ueEpWatched')?.value) ?? 0),
-    ep_total: __getTotalEpisodesFromAnime(anime)
-  };
-
-  // keep it clean
-  if (!payload.status) payload.status = 'Watching';
-  if (!Number.isFinite(payload.score) || payload.score < 0) payload.score = 0;
-  if (!Number.isFinite(payload.rewatches) || payload.rewatches < 0) payload.rewatches = 0;
-  if (!Number.isFinite(payload.ep_watched) || payload.ep_watched < 0) payload.ep_watched = 0;
-  if (payload.ep_total > 0 && payload.ep_watched > payload.ep_total) payload.ep_watched = payload.ep_total;
-
-  try{
-    // Use your existing worker helper if present
-    if (typeof cloudListUpsert === 'function'){
-      await cloudListUpsert(payload);
-    } else {
-      // If your project names it differently, this will immediately tell you
-      throw new Error('cloudListUpsert() not found (your API helper is missing)');
-    }
-
-    // cache locally so modal re-opens with values instantly
-    __cloudListByMal.set(+malId, payload);
-
-    showNotification?.('Saved');
-    __closeUserEntryModal();
-
-    // refresh list UI
-    if (typeof loadListFromCloudAndHydrate === 'function'){
-      await loadListFromCloudAndHydrate();
-      renderAnimeCards?.();
-    }
-  }catch(err){
-    console.error(err);
-    showNotification?.('Save failed');
-  }
-}
-
-async function __deleteUserEntry(){
-  if (!isUserLoggedIn()) return;
-
-  const anime = __ueActiveAnime;
-  if (!anime) return;
-
-  const malId = __getMalIdFromAnime(anime);
-  if (!malId) { showNotification?.('Missing MAL ID'); return; }
-
-  try{
-    if (typeof cloudListRemove === 'function'){
-      await cloudListRemove(+malId);
-    } else {
-      throw new Error('cloudListRemove() not found (your API helper is missing)');
-    }
-
-    __cloudListByMal.delete(+malId);
-
-    showNotification?.('Deleted');
-    __closeUserEntryModal();
-
-    if (typeof loadListFromCloudAndHydrate === 'function'){
-      await loadListFromCloudAndHydrate();
-      renderAnimeCards?.();
-    }
-  }catch(err){
-    console.error(err);
-    showNotification?.('Delete failed');
-  }
-}
-
-/* Event wiring */
-document.addEventListener('click', (e) => {
-  // Quick add click
-  const btn = e.target?.closest?.('.card-quick-add');
-  if (btn){
-    e.stopPropagation();
-    const card = btn.closest('.anime-card');
-    const id = card?.dataset?.id;
-
-    // Find anime in current list (or spotlight/home pools)
-    const a =
-      (window.animeList || []).find(x => String(x.id) === String(id)) ||
-      (window.__homeSpotlightPool || []).find(x => String(x.id) === String(id)) ||
-      null;
-
-    if (a) __openUserEntryModal(a);
-    return;
-  }
-
-  // close button
-  if (e.target?.id === 'userEntryCloseBtn') __closeUserEntryModal();
-
-  // overlay click closes
-  const modal = e.target?.closest?.('#userEntryModal');
-  if (modal && e.target === modal) __closeUserEntryModal();
-});
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape'){
-    const modal = document.getElementById('userEntryModal');
-    if (modal?.classList?.contains('active')) __closeUserEntryModal();
-  }
-});
-
-document.addEventListener('click', (e) => {
-  if (e.target?.id === 'ueSaveBtn') __saveUserEntry();
-  if (e.target?.id === 'ueDeleteBtn') __deleteUserEntry();
-});
 
 
 
@@ -7077,13 +6935,6 @@ homeView?.addEventListener('click', (e) => {
   if (!e.target.closest('.context-menu')) openEntryDetails(id, 'home');
 });
 
-homeView?.addEventListener('contextmenu', (e) => {
-  const target = e.target.closest('.anime-card');
-  if (!target) return;
-  e.preventDefault();
-  const id = target.getAttribute('data-id');
-  showEntryContextMenu(id, e.clientX, e.clientY, 'list');
-});
 
 
       // Detail modal: button beside Close opens the 5 options menu
