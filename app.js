@@ -350,7 +350,7 @@ function __safeJson(res) {
 
 /* -------------------- LIST JWT + LIST FETCH -------------------- */
 
-let __listJwt = null;
+
 
 async function getListJwt({ force = false } = {}) {
   if (__listJwt && !force) return __listJwt;
