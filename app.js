@@ -272,60 +272,6 @@ const profileFab  = $('#profileFab');
 const accountFab  = $('#accountFab');
 const settingsFab = $('#settingsFab');
 
-// -------------------- AUTH (Worker cookie sessions) --------------------
-const AUTH_API_BASE = 'https://anitrack-auth.usersam1216.workers.dev';
-const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot';
-
-// -------------------- LIST (D1 list worker + JWT from auth) --------------------
-// IMPORTANT: set this to your *list worker* URL (the worker that has /list, /list/add, etc.)
-const LIST_API_BASE = 'https://anitrack-userlist.usersam1216.workers.dev';
-
-let __listJwt = null; // keep in-memory (simple + safe)
-
-async function getListJwt({ force = false } = {}) {
-  if (__listJwt && !force) return __listJwt;
-
-  // Uses your auth cookie session to mint a short-lived JWT
-  const res = await authFetch('/auth/list-token', { method: 'GET' });
-  const data = await __safeJson(res);
-
-  if (!res.ok || !data?.ok || !data?.token) {
-    __listJwt = null;
-    throw new Error(data?.error || `Failed to get list token (${res.status})`);
-  }
-
-  __listJwt = data.token;
-  return __listJwt;
-}
-
-window.__listFetchJwt = async function listFetch(path, init = {}) {
-  const token = await getListJwt();
-const headers = {
-  "content-type": "application/json",
-  ...(init.headers || {}),
-  "Authorization": `Bearer ${token}`,
-};
-
-let res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers });
-// NOTE: no credentials needed for Bearer JWT
-
-
-  // If token expired, refresh once and retry
-  if (res.status === 401) {
-    const fresh = await getListJwt({ force: true });
-    const headers2 = { ...headers, Authorization: `Bearer ${fresh}` };
-    res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers: headers2 });
-  }
-
-  return res;
-}
-
-
-
-// -------------------- LIST API (D1 MAL-ID store) --------------------
-// IMPORTANT: replace this with your *new* List Worker URL
-
-
 // Sidebar auth UI
 const sbAuth      = $('#sbAuth');
 const sbAuthGuest = $('#sbAuthGuest');
@@ -350,46 +296,16 @@ function __safeJson(res) {
   return res.json().catch(() => ({}));
 }
 
-/* -------------------- LIST JWT + LIST FETCH -------------------- */
+// -------------------- API (Unified Auth + List Worker) --------------------
+// SINGLE worker handles BOTH auth + list via cookie session
+const AUTH_API_BASE = 'https://anitrack-user-auth-list.usersam1216.workers.dev';
+const LIST_API_BASE = 'https://anitrack-user-auth-list.usersam1216.workers.dev';
 
+// Optional UI cache (can remove later if you truly want zero localStorage usage)
+const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot';
 
+// NOTE: Old JWT list-token flow removed. Everything uses credentials: "include".
 
-async function getListJwt({ force = false } = {}) {
-  if (__listJwt && !force) return __listJwt;
-
-  // call AUTH worker (cookie-based) to mint JWT
-  const res = await authFetch('/auth/list-token', { method: 'GET' });
-  const j = await __safeJson(res);
-
-  if (!res.ok || !j?.ok || !j?.token) {
-    __listJwt = null;
-    throw new Error(j?.error || `list_token_failed_${res.status}`);
-  }
-
-  __listJwt = j.token;
-  return __listJwt;
-}
-
-async function listFetch(path, init = {}) {
-  // calls LIST worker (Bearer-based)
-  const token = await getListJwt();
-  const headers = {
-    "content-type": "application/json",
-    ...(init.headers || {}),
-    "authorization": `Bearer ${token}`,
-  };
-
-  let res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers });
-
-  // if expired, refresh once
-  if (res.status === 401) {
-    const fresh = await getListJwt({ force: true });
-    const headers2 = { ...headers, "authorization": `Bearer ${fresh}` };
-    res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers: headers2 });
-  }
-
-  return res;
-}
 
 function getCachedAuthUser() {
   try {
@@ -430,16 +346,21 @@ function authUrl(path) {
 
 function authFetch(path, init = {}) {
   const headers = {
-    "content-type": "application/json",
     ...(init.headers || {}),
   };
+
+  // only set content-type if we actually send a body
+  if (init.body && !headers['content-type'] && !headers['Content-Type']) {
+    headers['content-type'] = 'application/json';
+  }
 
   return fetch(`${AUTH_API_BASE}${path}`, {
     ...init,
     headers,
-    credentials: "include", // sends/receives cookie session
+    credentials: "include",
   });
 }
+
 
 
 
@@ -498,12 +419,21 @@ function syncAccountFields() {
   if (em) em.value = u?.email || '';
 }
 
-// IMPORTANT: do not redefine listFetch again later.
-// This wrapper keeps older code paths working without switching auth methods.
 async function listFetch(path, init = {}) {
-  // assumes the JWT/Bearer-based listFetch earlier in the file is the real one
-  return window.__listFetchJwt(path, init);
+  const url = LIST_API_BASE + path;
+
+  const headers = { ...(init.headers || {}) };
+  if (init.body && !headers['content-type'] && !headers['Content-Type']) {
+    headers['content-type'] = 'application/json';
+  }
+
+  return fetch(url, {
+    ...init,
+    credentials: 'include',
+    headers,
+  });
 }
+
 
 // Loads MAL IDs from cloud and makes sure your local "animeList" contains those IDs.
 // This does NOT change your UI design — it just ensures #list has the right items.
@@ -2045,7 +1975,7 @@ function repairLinkRelations() {
 }
 
 function loadFromLocalStorage() {
-  // 1) Load tracking dates (unchanged)
+  // Only keep small UI-only values locally (tracking dates).
   try {
     const s = localStorage.getItem('trackingStartDate');
     const e = localStorage.getItem('trackingEndDate');
@@ -2053,123 +1983,34 @@ function loadFromLocalStorage() {
     if (e) trackingEndDate = new Date(e);
   } catch {}
 
-  // 2) Load new stores
-  let dbLoaded = false;
-  try {
-    const rawDB = localStorage.getItem(LS_DB_KEY);
-    const rawList = localStorage.getItem(LS_LIST_KEY);
+  // D1 is the source of truth for the list now.
+  // Keep stores in-memory only (empty until cloud hydrate runs).
+  UserDatabase = { version: 1, updatedAt: Date.now(), entries: {} };
+  UserAnimeList = [];
+  animeList = animeList || [];
 
-    if (rawDB) {
-      const parsed = JSON.parse(rawDB);
-      if (parsed && typeof parsed === 'object') {
-        UserDatabase = {
-          version: Number(parsed.version || 1),
-          updatedAt: Number(parsed.updatedAt || 0),
-          entries: (parsed.entries && typeof parsed.entries === 'object') ? parsed.entries : {}
-        };
-        dbLoaded = true;
-      }
-    }
-
-    if (rawList) {
-      const parsedList = JSON.parse(rawList);
-      UserAnimeList = Array.isArray(parsedList) ? parsedList : [];
-      dbLoaded = true;
-    }
-  } catch {
-    // fall through to migration/empty
-  }
-
-  // 3) If new stores empty but legacy animeList exists, MIGRATE ONCE
-  if (!dbLoaded || (!Object.keys(UserDatabase.entries || {}).length && !(UserAnimeList || []).length)) {
-    try {
-      const legacy = localStorage.getItem('animeList');
-      const legacyList = legacy ? JSON.parse(legacy) : [];
-      if (Array.isArray(legacyList) && legacyList.length) {
-        animeList = legacyList;
-
-        // normalize old entries into stores
-        saveToLocalStorage();
-
-        // optional: remove legacy key so we stop using it
-        try { localStorage.removeItem('animeList'); } catch {}
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // 4) Hydrate for UI
-  hydrateAnimeListFromStores();
-
-  // 5) Keep your existing repair steps operating on hydrated list
-  normalizeIds();
-  repairLinkRelations();
-
-  // Persist repairs back into the new stores
-  saveToLocalStorage();
+  // Keep your existing repair steps safe (they’ll run on whatever is loaded later).
+  normalizeIds?.();
+  repairLinkRelations?.();
 }
 
 function saveToLocalStorage() {
+  // NO LIST PERSISTENCE TO LOCALSTORAGE ANYMORE.
+  // Keep tracking dates only (tiny + harmless).
   try {
-    // build fresh stores from hydrated animeList
-    const freshDB = {
-      version: 1,
-      updatedAt: Date.now(),
-      entries: {}
-    };
-    const freshList = [];
-
-    (animeList || []).forEach(a => {
-      if (!a) return;
-      const { key, dbEntry, listEntry } = splitHydratedEntry(a);
-      freshDB.entries[key] = dbEntry;
-      freshList.push(listEntry);
-    });
-
-    // ✅ Merge: keep any previously cached UserDatabase entries too
-    let prevDB = null;
-    try { prevDB = JSON.parse(localStorage.getItem(LS_DB_KEY) || 'null'); } catch {}
-    if (!prevDB || typeof prevDB !== 'object') prevDB = { version: 1, updatedAt: 0, entries: {} };
-    if (!prevDB.entries || typeof prevDB.entries !== 'object') prevDB.entries = {};
-
-    const mergedDB = {
-      version: 1,
-      updatedAt: Date.now(),
-      entries: {
-        ...prevDB.entries,      // keep cached entries (clicked/shown)
-        ...freshDB.entries      // overwrite with the latest canonical copies from your list
-      }
-    };
-
-    UserDatabase = mergedDB;
-    UserAnimeList = freshList;
-
-    localStorage.setItem(LS_DB_KEY, JSON.stringify(UserDatabase));
-    localStorage.setItem(LS_LIST_KEY, JSON.stringify(UserAnimeList));
-
-
-    // keep tracking dates as before
     localStorage.setItem('trackingStartDate', trackingStartDate.toISOString());
     localStorage.setItem('trackingEndDate', trackingEndDate.toISOString());
+  } catch {}
 
-    // enforce the new system (don’t keep writing legacy)
-    try { localStorage.removeItem('animeList'); } catch {}
-  } catch (err) {
-    if (err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014)) {
-      alert('Storage is full. Images were too large. Try smaller images (now auto-compressed) or remove a few.');
-    } else {
-      console.error(err);
-      alert('Could not save changes.');
-    }
-  }
+  // Keep cloud in sync (debounced) if available
+  try { syncListToCloudDebounced?.(); } catch (_) {}
 }
 
 
-/* ----------------------- CLOUD LIST (D1 via Worker) ----------------------- */
+
+/* ----------------------- CLOUD LIST (D1 via unified worker) ----------------------- */
 
 function __getMalIdFromEntry(entry) {
-  // Try the common places your code might store MAL id
   const v =
     entry?.malId ??
     entry?.mal_id ??
@@ -2182,6 +2023,52 @@ function __getMalIdFromEntry(entry) {
   const n = Number(v);
   return (Number.isFinite(n) && n > 0) ? n : null;
 }
+
+let __cloudSyncTimer = null;
+function syncListToCloudDebounced() {
+  if (!isUserLoggedIn()) return;
+
+  clearTimeout(__cloudSyncTimer);
+  __cloudSyncTimer = setTimeout(async () => {
+    try {
+      // desired from UI memory
+      const desired = new Map(); // malId -> status
+      for (const a of (animeList || [])) {
+        const malId = __getMalIdFromEntry(a);
+        if (!malId) continue;
+        desired.set(malId, a?.status || 'Plan to Watch');
+      }
+
+      // current from cloud
+      const res = await listFetch('/list', { method: 'GET' });
+      const j = await __safeJson(res);
+      if (!res.ok || !j?.ok) throw new Error(j?.error || `list_fetch_failed_${res.status}`);
+
+      const currentItems = Array.isArray(j.items) ? j.items : [];
+      const currentIds = new Set(
+        currentItems.map(it => Number(it?.mal_id)).filter(n => Number.isFinite(n) && n > 0)
+      );
+
+      // delete items that exist in cloud but not locally
+      for (const mid of currentIds) {
+        if (!desired.has(mid)) {
+          await listFetch(`/list/${mid}`, { method: 'DELETE' });
+        }
+      }
+
+      // upsert everything desired
+      for (const [mid, status] of desired.entries()) {
+        await listFetch('/list/upsert', {
+          method: 'POST',
+          body: JSON.stringify({ malId: mid, status }),
+        });
+      }
+    } catch (e) {
+      console.warn('Cloud list sync failed:', e);
+    }
+  }, 600);
+}
+
 
 async function __listApi(path, options = {}) {
   if (!LIST_API_BASE || LIST_API_BASE.includes('YOURNAME')) {
@@ -2202,7 +2089,8 @@ async function __listApi(path, options = {}) {
 
 async function cloudListGetIds() {
   const r = await __listApi('/list', { method: 'GET' });
-  return (r && r.ok && Array.isArray(r.ids)) ? r.ids : [];
+  if (!r || !r.ok || !Array.isArray(r.items)) return [];
+  return r.items.map(x => Number(x.mal_id)).filter(n => Number.isFinite(n));
 }
 
 async function cloudListAdd(malId) {
@@ -2214,8 +2102,9 @@ async function cloudListAdd(malId) {
 async function cloudListRemove(malId) {
   const n = Number(malId);
   if (!Number.isFinite(n) || n <= 0) return;
-  await __listApi('/list/remove', { method: 'POST', body: JSON.stringify({ malId: n }) });
+  await __listApi(`/list/${n}`, { method: 'DELETE' });
 }
+
 
 let __cloudSyncTimer = null;
 function syncListToCloudDebounced() {
