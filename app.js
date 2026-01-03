@@ -3227,15 +3227,38 @@ async function loadHomeEmptyStateRecs() {
       sortByScoreDesc(allRaw)
     ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
 
-    // Spotlight pool = all 50 combined
-    __homeSpotlightPool = [
-      ...popular10,
-      ...airing10,
-      ...upcoming10,
-      ...topYear10,
-      ...topLastSeason10
-    ];
+    // Spotlight pool = 15 current season + 15 last season + 15 upcoming (ONLY Spotlight)
+    const SPOTLIGHT_COUNT = 25;
 
+    const currentSeason15 = fillToCountUnique(
+      bySeason(airingRaw, currentSeasonLabel),
+      airingRaw,
+      SPOTLIGHT_COUNT
+    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+    const lastSeason15 = fillToCountUnique(
+      sortByScoreDesc(bySeason(allRaw, lastSeasonLabel)),
+      sortByScoreDesc(allRaw),
+      SPOTLIGHT_COUNT
+    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+    const upcomingSeason15 = fillToCountUnique(
+      bySeason(upcomingRaw, nextSeasonLabel),
+      upcomingRaw,
+      SPOTLIGHT_COUNT
+    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+    // Merge + de-dupe (safety)
+    const spotlightPool = [];
+    const spotlightSeen = new Set();
+    [...currentSeason15, ...lastSeason15, ...upcomingSeason15].forEach(a => {
+      const id = String(a?.id ?? '');
+      if (!id || spotlightSeen.has(id)) return;
+      spotlightSeen.add(id);
+      spotlightPool.push(a);
+    });
+
+    __homeSpotlightPool = spotlightPool;
     __spotlightIds = __homeSpotlightPool.map(a => String(a.id));
     __spotlightIndex = 0;
 
