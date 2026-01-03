@@ -7903,7 +7903,7 @@ function initBrowseSearch() {
     });
 
 
-  }
+  
 
 
   const setClearVisible = () => {
