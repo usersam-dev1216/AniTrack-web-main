@@ -2070,40 +2070,7 @@ function syncListToCloudDebounced() {
 }
 
 
-async function __listApi(path, options = {}) {
-  if (!LIST_API_BASE || LIST_API_BASE.includes('YOURNAME')) {
-    return { ok: false, error: 'list_api_base_not_set' };
-  }
 
-  // IMPORTANT: userlist worker is Bearer-JWT protected.
-  // Use the existing listFetch() which mints JWT via /auth/list-token.
-  const res = await listFetch(path, {
-    headers: { ...(options.headers || {}) },
-    ...options,
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, status: res.status, ...data };
-  return data;
-}
-
-async function cloudListGetIds() {
-  const r = await __listApi('/list', { method: 'GET' });
-  if (!r || !r.ok || !Array.isArray(r.items)) return [];
-  return r.items.map(x => Number(x.mal_id)).filter(n => Number.isFinite(n));
-}
-
-async function cloudListAdd(malId) {
-  const n = Number(malId);
-  if (!Number.isFinite(n) || n <= 0) return;
-  await __listApi('/list/add', { method: 'POST', body: JSON.stringify({ malId: n }) });
-}
-
-async function cloudListRemove(malId) {
-  const n = Number(malId);
-  if (!Number.isFinite(n) || n <= 0) return;
-  await __listApi(`/list/${n}`, { method: 'DELETE' });
-}
 
 
 
