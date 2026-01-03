@@ -411,6 +411,17 @@ async function authLogout() {
   setAuthUser(null);
 }
 
+// NEW: update username (Account page)
+async function authUpdateUsername(username) {
+  const res = await authFetch('/auth/username', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username })
+  });
+  const j = await __safeJson(res);
+  return { res, j };
+}
+
 function syncAccountFields() {
   const u = __authUser || getCachedAuthUser();
   const un = $('#accUsername');
@@ -550,6 +561,65 @@ function initAuth() {
   accLogoutBtn?.addEventListener('click', async () => {
     await authLogout();
     location.hash = '#home';
+  });
+
+  // NEW: Account save (username)
+  const accountForm = accountView?.querySelector('form');
+  const accSaveBtn =
+    $('#accSaveBtn') ||
+    accountView?.querySelector('[data-action="save-account"]') ||
+    accountView?.querySelector('button[type="submit"]');
+
+  const doAccountSave = async () => {
+    if (!isUserLoggedIn()) {
+      showNotification?.('Please log in first.');
+      location.hash = '#userlogin';
+      return;
+    }
+
+    const newUsername = String($('#accUsername')?.value || '').trim();
+    const current = (__authUser || getCachedAuthUser())?.username || '';
+
+    if (!newUsername) return showNotification?.('Username cannot be empty.');
+    if (newUsername === current) return showNotification?.('No changes to save.');
+
+    // same rules as API
+    if (newUsername.length < 3 || newUsername.length > 24) return showNotification?.('Username must be 3–24 characters.');
+    if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) return showNotification?.('Username can only use letters, numbers, underscore.');
+
+    // disable button while saving
+    if (accSaveBtn) accSaveBtn.disabled = true;
+
+    try {
+      const { res, j } = await authUpdateUsername(newUsername);
+      if (!res.ok || !j?.ok) {
+        showNotification?.(`Save failed: ${j?.error || 'save_failed'}`);
+        return;
+      }
+
+      // update local auth snapshot + UI
+      if (j?.user) setAuthUser(j.user);
+      syncAccountFields();
+      syncAuthUI();
+      showNotification?.('Username updated.');
+    } catch (e) {
+      console.error(e);
+      showNotification?.('Save failed (network/CORS).');
+    } finally {
+      if (accSaveBtn) accSaveBtn.disabled = false;
+    }
+  };
+
+  // If your account page uses a form, submit saves username
+  accountForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    doAccountSave();
+  });
+
+  // If there’s a save button, clicking it saves username
+  accSaveBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    doAccountSave();
   });
 
   // SIGNUP
