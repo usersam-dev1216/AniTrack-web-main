@@ -318,9 +318,7 @@ async function listFetch(path, init = {}) {
   return res;
 }
 
-// -------------------- LIST (Worker + D1; stores only MAL IDs) --------------------
-// Put your NEW list worker url here (example placeholder):
-const LIST_API_BASE = 'https://anitrack-list.usersam1216.workers.dev';
+
 
 // -------------------- LIST API (D1 MAL-ID store) --------------------
 // IMPORTANT: replace this with your *new* List Worker URL
