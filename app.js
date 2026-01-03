@@ -7847,51 +7847,26 @@ function initBrowseSearch() {
     initBrowseSearch.__boundClicks = true;
 
     shell.addEventListener('click', (e) => {
-  // If the user clicked the "+" button, open the list-entry modal (logged-in only)
-  const addBtn = e.target.closest('.browse-add-btn');
-  if (addBtn) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!isUserLoggedIn?.()) {
-      showNotification?.('Please log in to add entries to your list.');
-      return;
-    }
-
-    const malId =
-      addBtn.getAttribute('data-mal-id') ||
-      addBtn.closest('.browse-anime-card')?.getAttribute('data-mal-id');
-
-    if (!malId) return;
-
-    // Call whichever modal-open function exists (from your earlier patches),
-    // otherwise fallback to opening EntryDetails.
-    if (typeof openListEntryModalFromMAL === 'function') {
-      openListEntryModalFromMAL(malId);
-      return;
-    }
-    if (typeof openEntryEditModalFromMAL === 'function') {
-      openEntryEditModalFromMAL(malId);
-      return;
-    }
-
-    // fallback
-    openEntryDetailsMAL(malId);
-    return;
-  }
-
-  // Normal click on card opens EntryDetails
-    shell.addEventListener('click', (e) => {
-      // "+" button should not open EntryDetails
-      const plus = e.target.closest('.card-quick-add');
-      if (plus) {
+      // If the user clicked the "+" button, open the Add/Edit entry modal (logged-in only)
+      const addBtn = e.target.closest('.browse-add-btn, .card-quick-add');
+      if (addBtn) {
         e.preventDefault();
         e.stopPropagation();
-        const malId = plus.getAttribute('data-mal-id');
+
+        if (!isUserLoggedIn?.()) {
+          showNotification?.('Please log in to add entries to your list.');
+          return;
+        }
+
+        const malId =
+          addBtn.getAttribute('data-mal-id') ||
+          addBtn.closest('.browse-anime-card, .anime-card')?.getAttribute('data-mal-id');
+
         if (malId) openUserEntryModalFromMalId(malId);
         return;
       }
 
+      // Normal click on a browse card opens EntryDetails
       const card = e.target.closest('.browse-anime-card');
       if (!card) return;
 
@@ -7902,8 +7877,7 @@ function initBrowseSearch() {
       openEntryDetailsMAL(malId);
     });
 
-
-  
+  }
 
 
   const setClearVisible = () => {
