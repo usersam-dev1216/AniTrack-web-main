@@ -2106,28 +2106,7 @@ async function cloudListRemove(malId) {
 }
 
 
-let __cloudSyncTimer = null;
-function syncListToCloudDebounced() {
-  // Only try if logged in (your app uses __authUser + cached snapshot)
-  if (!__authUser) return;
 
-  clearTimeout(__cloudSyncTimer);
-  __cloudSyncTimer = setTimeout(async () => {
-    try {
-      const ids = (animeList || [])
-        .map(__getMalIdFromEntry)
-        .filter(Boolean);
-
-      // Bulk replace keeps it simple + consistent
-      await __listApi('/list/replace', {
-        method: 'POST',
-        body: JSON.stringify({ ids }),
-      });
-    } catch (e) {
-      console.warn('Cloud list sync failed:', e);
-    }
-  }, 600);
-}
 
 // Called when user opens #list
 async function loadListFromCloudAndHydrate() {
