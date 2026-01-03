@@ -446,6 +446,8 @@ async function listFetch(path, init = {}) {
 }
 
 
+
+
 // Loads MAL IDs from cloud and makes sure your local "animeList" contains those IDs.
 // This does NOT change your UI design — it just ensures #list has the right items.
 async function loadListFromCloudAndHydrate() {
@@ -489,6 +491,217 @@ async function loadListFromCloudAndHydrate() {
   if (added) saveToLocalStorage();
 }
 
+/* =========================
+   Cloud list cache (for modal prefill)
+   ========================= */
+const CloudListByMalId = new Map();
+
+/* Patch loadListFromCloudAndHydrate: cache full fields too */
+const __origLoadListFromCloudAndHydrate = loadListFromCloudAndHydrate;
+loadListFromCloudAndHydrate = async function () {
+  await __origLoadListFromCloudAndHydrate();
+
+  // Re-fetch once to get full rows (status + user fields)
+  if (!isUserLoggedIn()) return;
+  const res = await listFetch('/list', { method: 'GET' });
+  const j = await __safeJson(res);
+  if (!res.ok || !j?.ok) return;
+
+  const items = Array.isArray(j.items) ? j.items : [];
+  CloudListByMalId.clear();
+  for (const it of items) {
+    const malId = Number(it?.mal_id);
+    if (!malId) continue;
+    CloudListByMalId.set(malId, it);
+  }
+};
+
+/* =========================
+   User Entry Modal (open / prefill / save / delete)
+   ========================= */
+let __ueActiveMalId = null;
+let __ueActiveMeta = { title: '', image: '', totalEpisodes: 0 };
+
+function __getEl(id){ return document.getElementById(id); }
+
+async function __fetchMalMeta(malId){
+  try{
+    const r = await fetch(malApiUrl(`/api/anime/${encodeURIComponent(malId)}?fields=num_episodes,main_picture`));
+    if (!r.ok) return null;
+    const j = await r.json();
+    const d = j?.data || j;
+    const total = Number(d?.num_episodes || 0) || 0;
+    const img = d?.main_picture?.large || d?.main_picture?.medium || '';
+    return { totalEpisodes: total, image: img };
+  } catch { return null; }
+}
+
+async function openUserEntryModalFromMalId(malId){
+  if (!isUserLoggedIn()) return;
+
+  const mid = Number(malId);
+  if (!mid) return;
+
+  __ueActiveMalId = mid;
+
+  const modal = __getEl('userEntryModal');
+  if (!modal) return;
+
+  // meta: try from current card image first
+  const card = document.querySelector(`.anime-card[data-mal-id="${mid}"]`);
+  const title = card?.querySelector('.card-overlay-title')?.textContent?.trim() || '';
+  const img = card?.querySelector('img')?.getAttribute('src') || '';
+
+  __ueActiveMeta = { title, image: img, totalEpisodes: 0 };
+
+  // ensure total episodes (and maybe better cover)
+  const fetched = await __fetchMalMeta(mid);
+  if (fetched){
+    if (fetched.totalEpisodes) __ueActiveMeta.totalEpisodes = fetched.totalEpisodes;
+    if (fetched.image) __ueActiveMeta.image = fetched.image;
+  }
+
+  // cover
+  const cover = __getEl('userEntryCoverImg');
+  if (cover){
+    if (__ueActiveMeta.image){
+      cover.src = __ueActiveMeta.image;
+      cover.style.opacity = '1';
+    } else {
+      cover.removeAttribute('src');
+      cover.style.opacity = '0.25';
+    }
+  }
+
+  // total episodes label
+  __getEl('ueEpTotal').textContent = String(__ueActiveMeta.totalEpisodes || 0);
+
+  // prefill from cloud cache
+  const it = CloudListByMalId.get(mid) || null;
+
+  __getEl('ueStatus').value = it?.status ?? '';
+  __getEl('ueScore').value = String(it?.personal_rating ?? 0);
+  __getEl('ueStartDate').value = (it?.started_watching || '').slice(0,10);
+  __getEl('ueFinishDate').value = (it?.ended_watching || '').slice(0,10);
+  __getEl('ueNotes').value = it?.custom_notes ?? '';
+  __getEl('ueFavorite').checked = !!it?.is_favorite;
+  __getEl('ueRewatches').value = String(it?.total_rewatches ?? 0);
+  __getEl('ueCustomList').value = it?.custom_list ?? '';
+  __getEl('ueEpWatched').value = String(it?.episode_progress ?? 0);
+
+  // clamp watched
+  const wEl = __getEl('ueEpWatched');
+  wEl.max = String(__ueActiveMeta.totalEpisodes || 0);
+  const w = Number(wEl.value || 0) || 0;
+  if (__ueActiveMeta.totalEpisodes > 0 && w > __ueActiveMeta.totalEpisodes) wEl.value = String(__ueActiveMeta.totalEpisodes);
+  if (w < 0) wEl.value = '0';
+
+  // open modal
+  modal.classList.add('active');
+  modal.setAttribute('aria-hidden','false');
+}
+
+function closeUserEntryModal(){
+  const modal = __getEl('userEntryModal');
+  if (!modal) return;
+  modal.classList.remove('active');
+  modal.setAttribute('aria-hidden','true');
+  __ueActiveMalId = null;
+}
+
+async function saveUserEntryModal(){
+  if (!isUserLoggedIn()) return;
+  if (!__ueActiveMalId) return;
+
+  const mid = __ueActiveMalId;
+
+  const payload = {
+    malId: mid,
+    status: __getEl('ueStatus').value || 'Watching',
+    personalRating: Number(__getEl('ueScore').value || 0) || 0,
+    startedWatching: __getEl('ueStartDate').value || null,
+    endedWatching: __getEl('ueFinishDate').value || null,
+    customNotes: __getEl('ueNotes').value || '',
+    isFavorite: !!__getEl('ueFavorite').checked,
+    totalRewatches: Number(__getEl('ueRewatches').value || 0) || 0,
+    customList: __getEl('ueCustomList').value || null,
+    episodeProgress: Number(__getEl('ueEpWatched').value || 0) || 0
+  };
+
+  // clamp
+  if (payload.episodeProgress < 0) payload.episodeProgress = 0;
+  if (__ueActiveMeta.totalEpisodes > 0 && payload.episodeProgress > __ueActiveMeta.totalEpisodes) {
+    payload.episodeProgress = __ueActiveMeta.totalEpisodes;
+  }
+
+  const res = await listFetch('/list/upsert', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  const j = await __safeJson(res);
+  if (!res.ok || !j?.ok) {
+    showNotification?.(`Save failed: ${j?.error || res.status}`);
+    return;
+  }
+
+  // refresh cache + UI
+  await loadListFromCloudAndHydrate().catch(()=>{});
+  showNotification?.('Saved');
+  closeUserEntryModal();
+  renderAnimeCards?.();
+  renderHomePage?.();
+  if (!browseView?.hidden) renderBrowseHome?.();
+}
+
+async function deleteUserEntryModal(){
+  if (!isUserLoggedIn()) return;
+  if (!__ueActiveMalId) return;
+
+  const mid = __ueActiveMalId;
+
+  const res = await listFetch(`/list/${mid}`, { method: 'DELETE' });
+  const j = await __safeJson(res);
+  if (!res.ok || !j?.ok) {
+    showNotification?.(`Delete failed: ${j?.error || res.status}`);
+    return;
+  }
+
+  await loadListFromCloudAndHydrate().catch(()=>{});
+  showNotification?.('Deleted');
+  closeUserEntryModal();
+  renderAnimeCards?.();
+  renderHomePage?.();
+  if (!browseView?.hidden) renderBrowseHome?.();
+}
+
+/* Global click handling for + on ALL cards (Home/List cards) */
+document.addEventListener('click', (e) => {
+  const plus = e.target.closest('.card-quick-add');
+  if (plus) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isUserLoggedIn()) return;
+
+    const mid = plus.getAttribute('data-mal-id') || plus.closest('.anime-card')?.getAttribute('data-mal-id') || '';
+    if (mid) openUserEntryModalFromMalId(mid);
+    return;
+  }
+
+  if (e.target?.id === 'ueSaveBtn') { e.preventDefault(); saveUserEntryModal(); }
+  if (e.target?.id === 'ueDeleteBtn') { e.preventDefault(); deleteUserEntryModal(); }
+  if (e.target?.id === 'userEntryCloseBtn') { e.preventDefault(); closeUserEntryModal(); }
+
+  const modal = e.target.closest('#userEntryModal');
+  if (modal && e.target === modal) closeUserEntryModal();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const modal = __getEl('userEntryModal');
+    if (modal?.classList.contains('active')) closeUserEntryModal();
+  }
+});
 
 
 function syncAuthUI() {
@@ -524,7 +737,15 @@ function syncAuthUI() {
     headerProfileLink2.setAttribute('href', logged ? '#account' : '#usersignup');
   }
 
+  // body gate for CSS ("+ only when logged in")
+  document.body.classList.toggle('is-logged-in', logged);
+
   syncAccountFields();
+
+  // Make sure cards update instantly after login/logout
+  try { renderHomePage?.(); } catch {}
+  try { renderAnimeCards?.(); } catch {}
+  try { if (!browseView?.hidden) renderBrowseHome?.(); } catch {}
 }
 
 async function refreshAuthSession({ silent = false } = {}) {
@@ -2415,33 +2636,31 @@ renderHomePage();
        const card = document.createElement('div');
     card.className = 'anime-card';
     card.dataset.id = anime.id;
-    card.innerHTML = `
-  <div class="card-context">
-    <div class="context-menu">
-      <button class="context-option" data-action="edit"><i class="fas fa-edit"></i> Edit</button>
-      <button class="context-option" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
-    </div>
-  </div>
+    
+     card.innerHTML = `
+      <div class="card-context">
+        <div class="context-menu">
+          <button class="context-option" data-action="edit"><i class="fas fa-edit"></i> Edit</button>
+          <button class="context-option" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
+        </div>
+      </div>
 
-  <div class="card-image">
-    ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
-  </div>
+      ${isUserLoggedIn() ? `<button class="card-quick-add" type="button" data-mal-id="${anime?.malId ?? ''}" aria-label="Add/Edit entry" title="Add/Edit">+</button>` : ''}
 
-  <div class="card-overlay">
-    <div class="card-rating-pill">${ratingDisplay}</div>
+      <div class="card-image">
+        ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
+      </div>
+      <div class="card-overlay">
+        <div class="card-rating-pill">${ratingDisplay}</div>
+        ${anime.isFavorite ? '<div class="card-favorite-heart">⭐</div>' : ''}
+        <div class="card-overlay-bottom">
+          <h3 class="card-overlay-title">
+            ${anime.title}
+          </h3>
+          <div class="card-overlay-meta">${metaLine}</div>
+        </div>
+      </div>`;
 
-    ${isUserLoggedIn()
-      ? `<button class="card-quick-add" type="button" aria-label="Edit entry">+</button>`
-      : ''}
-
-    ${anime.isFavorite ? '<div class="card-favorite-heart">⭐</div>' : ''}
-
-    <div class="card-overlay-bottom">
-      <h3 class="card-overlay-title">${anime.title}</h3>
-      <div class="card-overlay-meta">${metaLine}</div>
-    </div>
-  </div>
-`;
 
 
     __ensureMalScoreForPill(anime, card.querySelector('.card-rating-pill'));
@@ -2518,7 +2737,7 @@ function buildCardForHome(anime){
   card.dataset.id = anime.id;
 
   // EXACT same markup as your list grid cards
-  card.innerHTML = `
+    card.innerHTML = `
     <div class="card-context">
       <div class="context-menu">
         <button class="context-option" data-action="edit"><i class="fas fa-edit"></i> Edit</button>
@@ -2526,7 +2745,7 @@ function buildCardForHome(anime){
       </div>
     </div>
 
-    ${isUserLoggedIn() ? `<button class="card-quick-add" type="button" title="Add/Edit list entry" aria-label="Add/Edit list entry">+</button>` : ''}
+    ${isUserLoggedIn() ? `<button class="card-quick-add" type="button" data-mal-id="${anime?.malId ?? ''}" aria-label="Add/Edit entry" title="Add/Edit">+</button>` : ''}
 
     <div class="card-image">
       ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
@@ -2548,6 +2767,7 @@ ${anime.isFavorite ?
           <div class="card-overlay-meta">${metaLine}</div>
         </div>
       </div>`;
+
 
   __ensureMalScoreForPill(anime, card.querySelector('.card-rating-pill'));
 
@@ -7661,15 +7881,27 @@ function initBrowseSearch() {
   }
 
   // Normal click on card opens EntryDetails
-  const card = e.target.closest('.browse-anime-card');
-  if (!card) return;
+    shell.addEventListener('click', (e) => {
+      // "+" button should not open EntryDetails
+      const plus = e.target.closest('.card-quick-add');
+      if (plus) {
+        e.preventDefault();
+        e.stopPropagation();
+        const malId = plus.getAttribute('data-mal-id');
+        if (malId) openUserEntryModalFromMalId(malId);
+        return;
+      }
 
-  const malId = card.getAttribute('data-mal-id');
-  if (!malId) return;
+      const card = e.target.closest('.browse-anime-card');
+      if (!card) return;
 
-  e.preventDefault();
-  openEntryDetailsMAL(malId);
-});
+      const malId = card.getAttribute('data-mal-id');
+      if (!malId) return;
+
+      e.preventDefault();
+      openEntryDetailsMAL(malId);
+    });
+
 
   }
 
@@ -7841,6 +8073,8 @@ function renderBrowseCardHTML(it){
 
   return `
     <div class="anime-card browse-anime-card" data-mal-id="${malId}">
+      ${isUserLoggedIn() ? `<button class="card-quick-add" type="button" data-mal-id="${malId}" aria-label="Add/Edit entry" title="Add/Edit">+</button>` : ''}
+
       <div class="card-image">
         ${img ? `<img src="${img}" alt="${title}">` : '<i class="fas fa-image"></i>'}
       </div>

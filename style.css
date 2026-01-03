@@ -6432,38 +6432,43 @@ body.route-settings .header-shell{
 
 
 /* =========================
-   Hover + Quick Add Button
+   + Hover Button (all cards)
+   Only shown when logged in
    ========================= */
-.anime-card{
-  position: relative;
-}
+.anime-card { position: relative; }
 
 .card-quick-add{
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(0,0,0,0.35);
+  position:absolute;
+  top:10px;
+  right:10px;
+
+  width:34px;
+  height:34px;
+  border-radius:10px;
+
+  display:grid;
+  place-items:center;
+
+  border:1px solid rgba(255,255,255,0.18);
+  background:rgba(0,0,0,0.35);
   backdrop-filter: blur(10px);
-  color: rgba(255,255,255,0.92);
-  font-weight: 900;
-  font-size: 18px;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  opacity: 0;
+
+  color:rgba(255,255,255,0.92);
+  font-weight:900;
+  font-size:18px;
+  line-height:1;
+
+  opacity:0;
   transform: translateY(-4px);
+  pointer-events:none;
   transition: opacity 160ms ease, transform 160ms ease, background 160ms ease, border-color 160ms ease;
-  z-index: 6;
+  z-index: 9;
 }
 
-.anime-card:hover .card-quick-add{
-  opacity: 1;
+body.is-logged-in .anime-card:hover .card-quick-add{
+  opacity:1;
   transform: translateY(0);
+  pointer-events:auto;
 }
 
 .card-quick-add:hover{
@@ -6480,123 +6485,99 @@ body.route-settings .header-shell{
 }
 
 .userentry-grid{
-  display: grid;
+  display:grid;
   grid-template-columns: 360px 1fr 360px;
-  gap: 26px;
-  align-items: start;
+  gap:26px;
+  align-items:start;
 }
 
 .userentry-cover{
-  width: 100%;
+  width:100%;
   aspect-ratio: 3 / 4;
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius:10px;
+  overflow:hidden;
   background: rgba(0,0,0,0.25);
   box-shadow: 0 22px 70px rgba(0,0,0,0.45);
 }
 
 .userentry-cover img{
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
 }
 
 .userentry-fields{
-  display: grid;
-  gap: 16px;
-  padding-top: 10px;
+  display:grid;
+  gap:16px;
+  padding-top:10px;
 }
 
 .userentry-notes{
-  display: grid;
-  gap: 10px;
-  padding-top: 10px;
+  display:grid;
+  gap:10px;
+  padding-top:10px;
 }
 
-.ue-row{
-  display: grid;
-  gap: 16px;
-}
-
-.ue-row-2{
-  grid-template-columns: 1fr 1fr;
-}
+.ue-row{ display:grid; gap:16px; }
+.ue-row-2{ grid-template-columns: 1fr 1fr; }
 
 .ue-field label{
-  display: block;
-  font-size: 13px;
-  opacity: 0.8;
-  margin-bottom: 8px;
+  display:block;
+  font-size:13px;
+  opacity:0.8;
+  margin-bottom:8px;
 }
 
 .ue-notes-area{
   min-height: 300px;
-  resize: none;
+  resize:none;
 }
 
-.ue-ep-progress{
-  display: grid;
-  gap: 8px;
-}
-
-.ue-ep-label{
-  font-size: 12px;
-  opacity: 0.7;
-}
+.ue-ep-progress{ display:grid; gap:8px; }
+.ue-ep-label{ font-size:12px; opacity:0.7; }
 
 .ue-ep-controls{
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
 
-.ue-ep-input{
-  width: 80px;
-}
-
-.ue-ep-divider{
-  opacity: 0.65;
-  font-weight: 700;
-}
-
-.ue-ep-total{
-  font-weight: 800;
-  opacity: 0.9;
-}
+.ue-ep-input{ width:80px; }
+.ue-ep-divider{ opacity:0.65; font-weight:700; }
+.ue-ep-total{ font-weight:800; opacity:0.9; }
 
 .ue-check-label{
-  display: flex !important;
-  align-items: center;
-  gap: 10px;
-  margin-top: 28px;
+  display:flex !important;
+  align-items:center;
+  gap:10px;
+  margin-top:28px;
 }
 
 .userentry-actions{
-  margin-top: 22px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 14px;
+  margin-top:22px;
+  display:flex;
+  justify-content:flex-end;
+  gap:14px;
 }
 
 .ue-delete-btn{
-  background: #8b0013;
-  border: 1px solid rgba(255,255,255,0.12);
-  padding: 12px 26px;
-  border-radius: 10px;
-  font-weight: 800;
+  background:#8b0013;
+  border:1px solid rgba(255,255,255,0.12);
+  padding:12px 26px;
+  border-radius:10px;
+  font-weight:800;
 }
 
 .ue-save-btn{
-  background: #ffc0d3;
-  color: #111;
-  border: 1px solid rgba(255,255,255,0.12);
-  padding: 12px 26px;
-  border-radius: 10px;
-  font-weight: 900;
+  background:#ffc0d3;
+  color:#111;
+  border:1px solid rgba(255,255,255,0.12);
+  padding:12px 26px;
+  border-radius:10px;
+  font-weight:900;
 }
 
-/* Responsive: stack on smaller screens */
 @media (max-width: 1100px){
   .userentry-grid{
     grid-template-columns: 300px 1fr;
@@ -6608,6 +6589,7 @@ body.route-settings .header-shell{
   .userentry-fields{ grid-area: fields; }
   .userentry-notes{ grid-area: notes; }
 }
+
 @media (max-width: 780px){
   .userentry-grid{
     grid-template-columns: 1fr;
@@ -6616,7 +6598,5 @@ body.route-settings .header-shell{
       "fields"
       "notes";
   }
-  .ue-row-2{
-    grid-template-columns: 1fr;
-  }
+  .ue-row-2{ grid-template-columns: 1fr; }
 }
