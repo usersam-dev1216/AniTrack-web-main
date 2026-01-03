@@ -6600,3 +6600,23 @@ body.is-logged-in .anime-card:hover .card-quick-add{
   }
   .ue-row-2{ grid-template-columns: 1fr; }
 }
+
+
+/* Guest mode: allow opening modal while logged out */
+.ue-guest-note{
+  margin-right:auto;           /* pushes buttons to the right */
+  font-weight:800;
+  opacity:0.9;
+  padding-right:12px;
+}
+
+/* Grey out + block interaction */
+.userentry-modal.is-guest .userentry-fields,
+.userentry-modal.is-guest .userentry-notes{
+  opacity:0.45;
+}
+
+.userentry-modal.is-guest .userentry-fields *,
+.userentry-modal.is-guest .userentry-notes *{
+  pointer-events:none;
+}

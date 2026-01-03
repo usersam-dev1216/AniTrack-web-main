@@ -537,8 +537,6 @@ async function __fetchMalMeta(malId){
 }
 
 async function openUserEntryModalFromMalId(malId){
-  if (!isUserLoggedIn()) return;
-
   const mid = Number(malId);
   if (!mid) return;
 
@@ -546,6 +544,28 @@ async function openUserEntryModalFromMalId(malId){
 
   const modal = __getEl('userEntryModal');
   if (!modal) return;
+
+  // ✅ Guest mode support
+  const isGuest = !isUserLoggedIn();
+  modal.classList.toggle('is-guest', isGuest);
+
+  const guestNote = __getEl('ueGuestNote');
+  if (guestNote) guestNote.hidden = !isGuest;
+
+  const setDisabled = (id, v) => {
+    const el = __getEl(id);
+    if (el) el.disabled = !!v;
+  };
+
+  // disable all inputs in guest mode
+  [
+    'ueStatus','ueScore','ueStartDate','ueFinishDate',
+    'ueNotes','ueFavorite','ueRewatches','ueCustomList','ueEpWatched'
+  ].forEach(id => setDisabled(id, isGuest));
+
+  // disable actions in guest mode
+  setDisabled('ueSaveBtn', isGuest);
+  setDisabled('ueDeleteBtn', isGuest);
 
   // meta: try from current card image first
   const card = document.querySelector(`.anime-card[data-mal-id="${mid}"]`);
@@ -610,7 +630,10 @@ function closeUserEntryModal(){
 }
 
 async function saveUserEntryModal(){
-  if (!isUserLoggedIn()) return;
+  if (!isUserLoggedIn()) {
+    showNotification?.('you need to login or sign up');
+    return;
+  }
   if (!__ueActiveMalId) return;
 
   const mid = __ueActiveMalId;
@@ -654,7 +677,10 @@ async function saveUserEntryModal(){
 }
 
 async function deleteUserEntryModal(){
-  if (!isUserLoggedIn()) return;
+  if (!isUserLoggedIn()) {
+    showNotification?.('you need to login or sign up');
+    return;
+  }
   if (!__ueActiveMalId) return;
 
   const mid = __ueActiveMalId;
@@ -681,7 +707,7 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!isUserLoggedIn()) return;
+    // ✅ allow opening modal while logged out (guest mode)
 
     const mid = plus.getAttribute('data-mal-id') || plus.closest('.anime-card')?.getAttribute('data-mal-id') || '';
     if (mid) openUserEntryModalFromMalId(mid);
@@ -7858,10 +7884,8 @@ function initBrowseSearch() {
         e.preventDefault();
         e.stopPropagation();
 
-        if (!isUserLoggedIn?.()) {
-          showNotification?.('Please log in to add entries to your list.');
-          return;
-        }
+           // ✅ allow opening modal while logged out (guest mode)
+
 
         const malId =
           addBtn.getAttribute('data-mal-id') ||
