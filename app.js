@@ -2071,6 +2071,20 @@ function syncListToCloudDebounced() {
 
 
 
+async function listFetch(path, init = {}) {
+  const headers = { ...(init.headers || {}) };
+
+  // only set content-type when we send a body
+  if (init.body && !headers['content-type'] && !headers['Content-Type']) {
+    headers['content-type'] = 'application/json';
+  }
+
+  return fetch(`${LIST_API_BASE}${path}`, {
+    ...init,
+    headers,
+    credentials: 'include',
+  });
+}
 
 
 
