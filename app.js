@@ -276,9 +276,13 @@ const settingsFab = $('#settingsFab');
 const AUTH_API_BASE = 'https://anitrack-auth.usersam1216.workers.dev';
 const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot';
 
+// -------------------- LIST (Worker + D1; stores only MAL IDs) --------------------
+// Put your NEW list worker url here (example placeholder):
+const LIST_API_BASE = 'https://anitrack-list.usersam1216.workers.dev';
+
 // -------------------- LIST API (D1 MAL-ID store) --------------------
 // IMPORTANT: replace this with your *new* List Worker URL
-const LIST_API_BASE = 'https://YOUR-LIST-WORKER.workers.dev';
+const LIST_API_BASE = 'https://anitrack-list.usersam1216.workers.dev';
 
 // Sidebar auth UI
 const sbAuth      = $('#sbAuth');
