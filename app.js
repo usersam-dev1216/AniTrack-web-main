@@ -2081,6 +2081,115 @@ function saveToLocalStorage() {
 }
 
 
+/* ----------------------- CLOUD LIST (D1 via Worker) ----------------------- */
+
+function __getMalIdFromEntry(entry) {
+  // Try the common places your code might store MAL id
+  const v =
+    entry?.malId ??
+    entry?.mal_id ??
+    entry?.mal ??
+    entry?.malInfo?.mal_id ??
+    entry?.malInfo?.node?.id ??
+    entry?.__malRaw?.mal_id ??
+    null;
+
+  const n = Number(v);
+  return (Number.isFinite(n) && n > 0) ? n : null;
+}
+
+async function __listApi(path, options = {}) {
+  if (!LIST_API_BASE || LIST_API_BASE.includes('YOURNAME')) {
+    // Don’t hard-crash; just no-op until you set the real URL.
+    return { ok: false, error: 'list_api_base_not_set' };
+  }
+
+  const res = await fetch(`${LIST_API_BASE}${path}`, {
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+    ...options,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, status: res.status, ...data };
+  return data;
+}
+
+async function cloudListGetIds() {
+  const r = await __listApi('/list', { method: 'GET' });
+  return (r && r.ok && Array.isArray(r.ids)) ? r.ids : [];
+}
+
+async function cloudListAdd(malId) {
+  const n = Number(malId);
+  if (!Number.isFinite(n) || n <= 0) return;
+  await __listApi('/list/add', { method: 'POST', body: JSON.stringify({ malId: n }) });
+}
+
+async function cloudListRemove(malId) {
+  const n = Number(malId);
+  if (!Number.isFinite(n) || n <= 0) return;
+  await __listApi('/list/remove', { method: 'POST', body: JSON.stringify({ malId: n }) });
+}
+
+let __cloudSyncTimer = null;
+function syncListToCloudDebounced() {
+  // Only try if logged in (your app uses __authUser + cached snapshot)
+  if (!__authUser) return;
+
+  clearTimeout(__cloudSyncTimer);
+  __cloudSyncTimer = setTimeout(async () => {
+    try {
+      const ids = (animeList || [])
+        .map(__getMalIdFromEntry)
+        .filter(Boolean);
+
+      // Bulk replace keeps it simple + consistent
+      await __listApi('/list/replace', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      });
+    } catch (e) {
+      console.warn('Cloud list sync failed:', e);
+    }
+  }, 600);
+}
+
+// Called when user opens #list
+async function loadListFromCloudAndHydrate() {
+  if (!__authUser) return;
+
+  try {
+    const ids = await cloudListGetIds();
+
+    // If you already have some local list, keep it, but ensure cloud entries exist locally.
+    // We hydrate missing items by opening EntryDetails in MAL mode (your app supports "mal:12345"):contentReference[oaicite:2]{index=2}.
+    const localMal = new Set((animeList || []).map(__getMalIdFromEntry).filter(Boolean));
+    const missing = ids.filter(id => !localMal.has(Number(id)));
+
+    // If you have a dedicated MAL-fetch function elsewhere, you can swap this block to use it.
+    // For now: create lightweight placeholder entries so the list shows *something* immediately,
+    // and your existing MAL enrichment logic can fill details when needed.
+    for (const malId of missing) {
+      animeList.push({
+        id: `mal:${malId}`,
+        title: `MAL #${malId}`,
+        subtitle: '',
+        image: '',
+        seasons: [],
+        malId: Number(malId)
+      });
+    }
+
+    saveToLocalStorage?.();
+    renderAnimeCards?.();
+  } catch (e) {
+    console.warn('loadListFromCloudAndHydrate failed:', e);
+  }
+}
+
+
+
 /* ---------------------------- Search + Sorting ---------------------------- */
 function sortAnimeList(list, sortBy) {
   if (!Array.isArray(list)) return [];
@@ -6007,9 +6116,15 @@ function __computeSeasonFromMAL(item, rawText = '') {
 
 /* ---------------------------- Delete / Helpers ---------------------------- */
 function deleteAnime(id) {
+  const target = (animeList || []).find(a => String(a.id) === String(id));
+  const malId = __getMalIdFromEntry(target);
+
   animeList = (animeList || []).filter(a => String(a.id) !== String(id));
   saveToLocalStorage();
   renderAnimeCards();
+
+  // cloud remove (best-effort)
+  if (__authUser && malId) cloudListRemove(malId).catch(() => {});
 }
 function deleteCurrentAnime() {
   if (currentEditId == null) return;
