@@ -322,7 +322,7 @@ async function listFetch(path, init = {}) {
 
 // -------------------- LIST API (D1 MAL-ID store) --------------------
 // IMPORTANT: replace this with your *new* List Worker URL
-const LIST_API_BASE = 'https://anitrack-list.usersam1216.workers.dev';
+
 
 // Sidebar auth UI
 const sbAuth      = $('#sbAuth');
