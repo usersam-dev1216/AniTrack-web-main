@@ -2415,29 +2415,34 @@ renderHomePage();
        const card = document.createElement('div');
     card.className = 'anime-card';
     card.dataset.id = anime.id;
-     card.innerHTML = `
-      <div class="card-context">
-        <div class="context-menu">
-          <button class="context-option" data-action="edit"><i class="fas fa-edit"></i> Edit</button>
-          <button class="context-option" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
-        </div>
-      </div>
+    card.innerHTML = `
+  <div class="card-context">
+    <div class="context-menu">
+      <button class="context-option" data-action="edit"><i class="fas fa-edit"></i> Edit</button>
+      <button class="context-option" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
+    </div>
+  </div>
 
-      ${isUserLoggedIn() ? `<button class="card-quick-add" type="button" title="Add/Edit list entry" aria-label="Add/Edit list entry">+</button>` : ''}
+  <div class="card-image">
+    ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
+  </div>
 
-      <div class="card-image">
-        ${anime.image ? `<img src="${anime.image}" alt="${anime.title}">` : '<i class="fas fa-image"></i>'}
-      </div>
-      <div class="card-overlay">
-        <div class="card-rating-pill">${ratingDisplay}</div>
-        ${anime.isFavorite ? '<div class="card-favorite-heart">⭐</div>' : ''}
-        <div class="card-overlay-bottom">
-          <h3 class="card-overlay-title">
-            ${anime.title}
-          </h3>
-          <div class="card-overlay-meta">${metaLine}</div>
-        </div>
-      </div>`;
+  <div class="card-overlay">
+    <div class="card-rating-pill">${ratingDisplay}</div>
+
+    ${isUserLoggedIn()
+      ? `<button class="card-quick-add" type="button" aria-label="Edit entry">+</button>`
+      : ''}
+
+    ${anime.isFavorite ? '<div class="card-favorite-heart">⭐</div>' : ''}
+
+    <div class="card-overlay-bottom">
+      <h3 class="card-overlay-title">${anime.title}</h3>
+      <div class="card-overlay-meta">${metaLine}</div>
+    </div>
+  </div>
+`;
+
 
     __ensureMalScoreForPill(anime, card.querySelector('.card-rating-pill'));
 
