@@ -276,6 +276,10 @@ const settingsFab = $('#settingsFab');
 const AUTH_API_BASE = 'https://anitrack-auth.usersam1216.workers.dev';
 const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot';
 
+// -------------------- LIST API (D1 MAL-ID store) --------------------
+// IMPORTANT: replace this with your *new* List Worker URL
+const LIST_API_BASE = 'https://YOUR-LIST-WORKER.workers.dev';
+
 // Sidebar auth UI
 const sbAuth      = $('#sbAuth');
 const sbAuthGuest = $('#sbAuthGuest');
@@ -400,6 +404,62 @@ function syncAccountFields() {
   if (un) un.value = u?.username || '';
   if (em) em.value = u?.email || '';
 }
+
+async function listFetch(path, init = {}) {
+  const url = LIST_API_BASE + path;
+  return fetch(url, {
+    ...init,
+    credentials: 'include',
+    headers: {
+      ...(init.headers || {}),
+      'content-type': 'application/json',
+    },
+  });
+}
+
+// Loads MAL IDs from cloud and makes sure your local "animeList" contains those IDs.
+// This does NOT change your UI design — it just ensures #list has the right items.
+async function loadListFromCloudAndHydrate() {
+  // 1) fetch ids
+  const res = await listFetch('/list', { method: 'GET' });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j?.ok) throw new Error(j?.error || `list_fetch_failed_${res.status}`);
+
+  const malIds = Array.isArray(j.malIds) ? j.malIds : [];
+  const ids = malIds.map(Number).filter(n => Number.isFinite(n) && n > 0);
+
+  // 2) Make sure local animeList contains these entries.
+  //    Your app already understands anime objects by id; we’ll create placeholders
+  //    and let your existing MAL syncing fill details (you already have MAL auto sync).
+  const existing = new Set((animeList || []).map(a => String(a.id)));
+  let added = 0;
+
+  for (const id of ids) {
+    const key = String(id);
+    if (existing.has(key)) continue;
+
+    // minimal placeholder; your MAL sync will enrich it later
+    (animeList || (animeList = [])).push({
+      id,
+      title: `MAL #${id}`,
+      image: '',
+      subtitle: '',
+      startDate: '',
+      endDate: '',
+      rating: '',
+      status: 'Planned',
+      isFavorite: false,
+      relations: [],
+    });
+    added++;
+  }
+
+  if (added > 0) {
+    saveToLocalStorage?.();
+  }
+}
+
+
 
 function syncAuthUI() {
   const u = __authUser || getCachedAuthUser();
@@ -6251,21 +6311,7 @@ deleteAnimeBtn?.addEventListener('click', () => {
 
 
 
-  // Status buttons
-  listSidebar.addEventListener('click', (e) => {
-    const btn = e.target.closest('.ls-btn[data-status]');
-    if (!btn) return;
 
-    activeStatusFilter = btn.dataset.status || 'All';
-
-    // If you have status chips elsewhere, keep them in sync
-    $$('.status-chip[data-status]').forEach(chip => {
-      chip.classList.toggle('active', (chip.dataset.status || 'All') === activeStatusFilter);
-    });
-
-    syncListSidebarStatus();
-    renderAnimeCards();
-  });
 
   
 
@@ -7196,7 +7242,7 @@ let __browseHomeCache = {
   mostPopular: []
 };
 
-const BROWSE_HOME_LIMIT = 12;
+const BROWSE_HOME_LIMIT = 15;
 const BROWSE_HOME_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 
@@ -7558,7 +7604,6 @@ function renderBrowseEmpty() {
   `;
 }
 
-
 function renderBrowseLoading(q) {
   const shell = document.getElementById('browseResultsShell');
   if (!shell) return;
@@ -7585,24 +7630,102 @@ function renderBrowseNoResults(q) {
   `;
 }
 
-function renderBrowseResults(items) {
+/* ------------------------ Browse search: title matching ---------------------- */
+function __normSearchText(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')     // strip accents
+    .replace(/[^a-z0-9\s]/g, ' ')        // punctuation -> space
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function __collectAllTitles(it) {
+  const titles = [
+    it?.title,
+    it?.title_english,
+    it?.title_japanese
+  ].filter(Boolean);
+
+  // (If later you add other title arrays, you can push them here too.)
+  return titles;
+}
+
+function __matchesAnyTitle(it, q) {
+  const qq = __normSearchText(q);
+  if (!qq) return false;
+
+  const hay = __collectAllTitles(it).map(__normSearchText).filter(Boolean);
+  if (!hay.length) return false;
+
+  // allow partial match, token match
+  if (hay.some(t => t.includes(qq))) return true;
+
+  const parts = qq.split(' ').filter(Boolean);
+  if (!parts.length) return false;
+
+  // all tokens should exist somewhere across any title
+  return parts.every(p => hay.some(t => t.includes(p)));
+}
+
+/* ------------------------- Public Jikan fallback search ---------------------- */
+async function jikanPublicSearchAnime(q, { limit = 25, signal } = {}) {
+  const url =
+    `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(q)}&limit=${encodeURIComponent(limit)}&sfw=true`;
+
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`Jikan search failed: ${res.status}`);
+
+  const json = await res.json();
+  const arr = Array.isArray(json?.data) ? json.data : [];
+
+  // Map Jikan objects to the same "Jikan-ish" shape your renderer expects
+  return arr.map(d => ({
+    mal_id: d?.mal_id,
+    title: d?.title || '',
+    title_english: d?.title_english || '',
+    title_japanese: d?.title_japanese || '',
+    type: d?.type || '',
+    episodes: d?.episodes ?? null,
+    season: d?.season ? `${String(d.season).replace(/^\w/, c => c.toUpperCase())} ${d?.year || ''}`.trim() : '',
+    year: d?.year ?? null,
+    genres: Array.isArray(d?.genres) ? d.genres.map(g => ({ name: g?.name || '' })) : [],
+    themes: Array.isArray(d?.themes) ? d.themes.map(t => ({ name: t?.name || '' })) : [],
+    score: d?.score ?? null,
+    images: d?.images || null
+  })).filter(Boolean);
+}
+
+/* -------------------- Results renderer: "Most popular area" ------------------ */
+function renderBrowseResults(items, q) {
   const shell = document.getElementById('browseResultsShell');
   if (!shell) return;
 
-  // Remove duplicates by MAL id
-  items = dedupeByMalId(items);
+  // dedupe + strict match against any title (main/en/jp)
+  items = dedupeByMalId(items).filter(it => __matchesAnyTitle(it, q));
 
-  // Store search results into the local browse meta DB (so future searches feel instant)
+  if (!items.length) {
+    renderBrowseNoResults(q);
+    return;
+  }
+
+  // store into local meta DB (future searches feel instant)
   upsertBrowseMetaItems(items, 'search');
 
-  // Use the SAME renderer as home cards (clean style + 2 lines + Add button)
+  // ✅ show results inside the same "Most Popular area" section style
   shell.innerHTML = `
-    <div class="browse-results-grid">
-      ${(items || []).map(renderBrowseCardHTML).join('')}
+    <div class="home-section">
+      <div class="home-section-head">
+        <h2 class="home-section-title">${escapeHtml(`Results for "${q}"`)}</h2>
+      </div>
+      <div class="home-section-line"></div>
+      <div class="browse-results-grid">
+        ${(items || []).map(renderBrowseCardHTML).join('')}
+      </div>
     </div>
   `;
 }
-
 
 async function runBrowseSearch(q) {
   const shell = document.getElementById('browseResultsShell');
@@ -7614,30 +7737,49 @@ async function runBrowseSearch(q) {
   const seq = ++__browseSeq;
   renderBrowseLoading(q);
 
-  const url = malApiUrl(
-  `/api/search?q=${encodeURIComponent(q)}&limit=25&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
-);
-  const res = await fetch(url, { signal: __browseAbort.signal });
+  try {
+    // 1) Primary: your MAL worker search
+    const url = malApiUrl(
+      `/api/search?q=${encodeURIComponent(q)}&limit=25&fields=mean,media_type,start_season,num_episodes,genres,alternative_titles`
+    );
+    const res = await fetch(url, { signal: __browseAbort.signal });
 
-  if (seq !== __browseSeq) return;
+    if (seq !== __browseSeq) return;
+    if (!res.ok) throw new Error(`Search failed: ${res.status}`);
 
-  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+    const json = await res.json();
+    const raw = Array.isArray(json?.data) ? json.data : [];
 
-  const json = await res.json();
-  const raw = Array.isArray(json?.data) ? json.data : [];
+    let items = raw
+      .map(x => malNodeToJikanLike(x?.node || x))
+      .filter(Boolean);
 
-  // ✅ Worker returns MAL format: [{ node: {...} }]
-  const items = raw
-    .map(x => malNodeToJikanLike(x?.node || x))
-    .filter(Boolean);
+    // 2) Fallback: if MAL returns nothing (or very few), use Jikan public search too
+    if (items.length < 4) {
+      try {
+        const jikanItems = await jikanPublicSearchAnime(q, { limit: 25, signal: __browseAbort.signal });
+        items = dedupeByMalId([...(items || []), ...(jikanItems || [])]);
+      } catch (e) {
+        // ignore fallback errors; still show MAL results if any
+        console.warn('Jikan fallback failed:', e);
+      }
+    }
 
-  if (!items.length) {
+    if (seq !== __browseSeq) return;
+
+    if (!items.length) {
+      renderBrowseNoResults(q);
+      return;
+    }
+
+    renderBrowseResults(items, q);
+  } catch (err) {
+    if (err?.name === 'AbortError') return;
+    console.error(err);
     renderBrowseNoResults(q);
-    return;
   }
-
-  renderBrowseResults(items);
 }
+
 
 
 
@@ -8382,9 +8524,21 @@ function applyRoute(){
   // render correct view content on navigation
   if (isHome) {
     renderHomePage();
-  } else if (isList) {
+} else if (isList) {
+  // If logged in: load list MAL IDs from List Worker, then render
+  (async () => {
+    try {
+      if (isUserLoggedIn?.()) {
+        await loadListFromCloudAndHydrate();
+      }
+    } catch (e) {
+      console.warn('List cloud load failed:', e);
+      // fallback: keep local list
+    }
     renderAnimeCards(); // respects card/list mode
-  } else if (isBrowse) {
+  })();
+} else if (isBrowse) {
+
     renderBrowsePage();
   } else if (isSettings) {
     renderSettingsPage();

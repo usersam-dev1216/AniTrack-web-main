@@ -100,8 +100,6 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
 
 /* ===================== BROWSE (cards only, no boxes) ===================== */
 #browseView .browse-results-shell{
-  max-width: 1280px;
-  margin: 16px auto 0;
   padding: 0;
   background: transparent;
   border: 0;
@@ -111,10 +109,63 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
 /* If your JS creates a grid wrapper, this keeps it neat */
 #browseView .browse-results-grid{
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   padding: 18px 18px;
 }
+
+/* ===================== Browse cards = Home row card design ===================== */
+#browseView .browse-results-grid .anime-card{
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
+
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+  box-shadow: 0 16px 50px rgba(0,0,0,.45);
+  overflow: hidden;
+
+  transition: transform .15s ease, border-color .15s ease, background .15s ease;
+}
+
+#browseView .browse-results-grid .anime-card:hover{
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,.16);
+  background: rgba(0,0,0,.24);
+}
+
+/* same “bottom-left text” behavior as Home row */
+#browseView .browse-results-grid .anime-card .card-overlay{
+  opacity: 1;
+  justify-content: flex-end;
+}
+
+/* Home row hides these — do the same in Browse grid */
+#browseView .browse-results-grid .anime-card .card-rating-pill,
+#browseView .browse-results-grid .anime-card .bulk-check-card,
+#browseView .browse-results-grid .anime-card .card-favorite-heart{
+  display: none !important;
+}
+
+#browseView .browse-results-grid .anime-card .card-overlay-bottom{
+  width: 100%;
+  padding: 0;
+}
+
+#browseView .browse-results-grid .anime-card .card-overlay-title{
+  font-size: .95rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+#browseView .browse-results-grid .anime-card .card-overlay-meta{
+  margin-top: 4px;
+  font-size: .82rem;
+  opacity: .78;
+}
+
+
 
 /* Optional: if empty-state looks like a box in your build, de-box it */
 #browseView .empty-state{
@@ -272,7 +323,8 @@ body.route-settings .settings-page-panel{
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 28px;
-
+  background: rgba(255, 255, 255, .05);
+  border-radius: 20px;
   overflow: hidden;
 }
 
@@ -422,23 +474,57 @@ body.route-browse #browseView{
   min-height: calc(100vh - 72px);
 }
 
-body.route-browse .browse-grid-topbar{
+/* ===================== BROWSE: 2-column layout (1350px) ===================== */
+body.route-browse .browse-layout{
   width: 100%;
-  max-width: 1180px;
+  max-width: 1350px;
   margin: 0 auto;
-  padding: 22px 16px 10px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  padding: 22px 16px 46px;
+
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 0;
+
+  /* ✅ IMPORTANT: make both columns stretch to the tallest column */
+  align-items: stretch;
+}
+
+
+/* LEFT column */
+body.route-browse .browse-main{
+  min-width: 0;
+}
+
+/* keep results inside the left column, no extra centering/max-width */
+body.route-browse .browse-results-shell{
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* RIGHT column (BrowseSearch panel) */
+body.route-browse .browse-search{
+  min-width: 0;
+  position: relative;
+  height: 100%;          /* ✅ ensures it fills the grid row height */
+  padding-left: 22px;    /* space after the line */
 }
 
 
 
-body.route-browse .browse-results-shell{
-  width: 100%;
-  max-width: 1700px;
-  margin: 0 auto;
-  padding: 18px 16px 46px;
+
+
+
+/* stack on smaller screens */
+@media (max-width: 980px){
+  body.route-browse .browse-layout{
+    grid-template-columns: 1fr;
+  }
+  body.route-browse .browse-search{
+    border-left: 0;
+    padding-left: 0;
+    margin-top: 18px;
+  }
 }
 
 .browse-results-grid{
@@ -622,8 +708,7 @@ color: var(--text-secondary);
 }
 
 .topnav-link.is-active{
-  background: rgba(124,58,237,.22);
-  border-color: rgba(124,58,237,.35);
+ color:var(--accent-3)
 }
 
 .topnav-link:active{
@@ -954,6 +1039,7 @@ color: var(--text-secondary);
   border-radius: 18px;
   padding: 0;
   overflow: hidden;
+  background: rgba(255, 255, 255, .05);
 }
 
 .home-section:first-child{ margin-top: 0; }
@@ -1518,51 +1604,86 @@ body.route-list .list-add-pill{
   filter: drop-shadow(0 6px 12px rgba(124,58,237,.35));
 }
 
-/* NEW SEARCH BOX STYLES */
+/* NEW SEARCH BOX STYLES (TARGET DESIGN) */
 
-.search-box {
-  display: flex;
-  line-height: 28px;
-  align-items: center;
+.search-box{
   position: relative;
-}
+  display: flex;
+  align-items: center;
 
-.search-box .input {
+  /* pill container like the target */
   width: 500px;
-  height: 48px;
-  line-height: 28px;
-  padding: 0 1rem;
-  padding-left: 2.5rem;
-  padding-right: 2.5rem;
-  border-radius: 999px;
+  max-width: 100%;
+  height: 62px;
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, .05);
+ 
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  padding: 0 18px;
+  gap: 14px;
+}
+
+/* keep icon always attached to the box */
+.search-box .icon{
+  position: static;              /* ✅ not absolute (prevents it “going away”) */
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+
+  display: grid;
+  place-items: center;
+
+  color: rgba(0,0,0,.55);
+  opacity: .95;
+}
+
+/* input becomes “text + underline” (no default textbox look) */
+.search-box .input{
+  flex: 1;
+  height: 100%;
+  width: 100%;
+
+  background: transparent !important;
+  border: 0 !important;
   outline: none;
-  transition: .3s ease;
-  background: linear-gradient(180deg, rgba(31,31,51,.8), rgba(27,27,42,.8)) !important;
-  border: 2px solid transparent !important;
-  color: var(--text-primary) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 1px 0 rgba(0,0,0,.35);
+
+  color: rgba(255,255,255,.92) !important;
+ 
+  font-weight: 300;
+  letter-spacing: .2px;
+
+ 
 }
 
-
-.search-box .input::placeholder {
-  color: var(--text-secondary);
+/* placeholder like the mock */
+.search-box .input::placeholder{
+  color: rgba(255,255,255,.80);
 }
 
-.search-box .input:focus, .search-box .input:hover {
-  outline: none;
-}
-
-.search-box .icon {
+/* long underline */
+.search-box::after{
+  content: "";
   position: absolute;
-  left: 1rem;
-  color: var(--text-secondary);
-  width: 1rem;
-  height: 1rem;
-  z-index: 1;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.70);
+  opacity: .9;
+
+  pointer-events: none;
 }
 
+/* keep your clear button inside the pill and above the underline */
+.search-box .clear-search-btn{
+  right: 8px;
+  z-index: 2;
+}
 
 
 
@@ -2468,6 +2589,47 @@ body.route-list .anime-card:hover .card-overlay-bottom {
   gap: 12px;
 }
 
+
+
+
+
+
+.clear-search-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 44px;              /* bigger clickable area */
+  height: 44px;
+  padding: 0;
+
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+
+  color: rgba(255,255,255,.88);
+}
+
+.clear-search-btn:hover{
+  color: rgba(255,255,255,1);
+  background: rgba(255,255,255,.12);
+}
+
+.clear-search-btn .clear-icon{
+  width: 26px;              /* ✅ make the X actually visible */
+  height: 26px;
+  display: block;
+}
+
+
+
+
+
+
+
+
+
 /* List View options – Callisto-style radio look */
 
 .setting-check {
@@ -3324,8 +3486,8 @@ body.route-list #animeGrid.list-mode .anime-list tbody tr.anime-row > td{
   right: 1rem;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(139, 92, 246, 0.2);
-  color: var(--accent-3);
+  background: transparent;
+  color: white;
   border: none;
   border-radius: 999px;
   padding: 6px 12px;
@@ -3336,10 +3498,6 @@ body.route-list #animeGrid.list-mode .anime-list tbody tr.anime-row > td{
   opacity: 0.85;
 }
 
-.clear-search-btn:hover {
-  background: rgba(139, 92, 246, 0.3);
-  opacity: 1;
-}
 
 .modal-content, .import-preview, .chart-container.scrollable {
   scrollbar-width: none;
@@ -3777,13 +3935,7 @@ select.form-control option {
 }
 
 
-.search-box .input:focus, .search-box .input:hover {
-  border-color: rgba(139,92,246,0.4) !important;
-  background: linear-gradient(180deg, rgba(31,31,51,.9), rgba(27,27,42,.9)) !important;
-  box-shadow: 0 0 0 4px rgba(139,92,246,0.1), 
-                inset 0 1px 0 rgba(255,255,255,.04), 
-                0 1px 0 rgba(0,0,0,.35) !important;
-}
+
 
 @keyframes formControlFocus {
     from {
@@ -4650,7 +4802,7 @@ border: 1px solid rgba(167, 139, 250, .12);
   content: "";
   flex: 1;
   height: 2px;
-  background: rgba(255,255,255,.85);
+  background: rgba(255,255,255,.16);
   border-radius: 999px;
   opacity: .9;
 }
@@ -5218,8 +5370,8 @@ ease;
 .entrydetails-page .entrydetails-panels{
   margin-top: 54px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 50px;
+ 
+  gap: 80px;
   align-items: start;
 }
 
@@ -5381,7 +5533,7 @@ ease;
   flex: 0 0 110px;       /* keeps all values aligned like your screenshot */
   white-space: nowrap;   /* prevents label wrapping */
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--accent-3)
 }
 
 .entrydetails-page .detail-value {
@@ -6240,3 +6392,40 @@ body.route-settings .header-shell{
   pointer-events: auto !important;
 }
 
+/* ===================== Global footer ===================== */
+.site-footer{
+  width: 100%;
+  margin-top: 40px;
+
+  /* similar dark gradient bar feel */
+  background: rgba(255, 255, 255, .05);
+ 
+
+.site-footer-inner{
+  max-width: 1350px;         /* matches your browse/page container */
+  margin: 0 auto;
+  padding: 16px 16px;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  color: rgba(255,255,255,.72);
+  font-size: 13px;
+}
+
+.footer-pill{
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.10);
+  color: rgba(255,255,255,.78);
+  font-size: 12px;
+}
+
+.footer-copy{
+  color: rgba(255,255,255,.62);
+}

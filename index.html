@@ -247,58 +247,8 @@
         </div>
 
 
-                <!-- LIST SIDEBAR (LIST PAGE ONLY) -->
-        <aside id="listSidebar" class="list-sidebar" aria-label="List sidebar">
-          <div class="ls-group ls-tools" aria-label="Tools">
-            <button id="lsAddBtn" class="ls-btn ls-tool" type="button" title="Add anime" aria-label="Add anime">
-              <i class="fas fa-plus"></i>
-            </button>
-
-      <button id="lsBulkBtn" class="ls-btn ls-tool" type="button" title="Bulk edit" aria-label="Bulk edit">
-  <i class="fas fa-pencil"></i>
-</button>
-
-
-            <button id="lsViewBtn" class="ls-btn ls-tool" type="button" title="Switch view" aria-label="Switch view">
-              <i class="fas fa-th-large"></i>
-            </button>
-          </div>
-
-          <div class="ls-sep" aria-hidden="true"></div>
-
-          <div class="ls-group ls-status" aria-label="Status filters">
-<button class="ls-btn active" data-status="All" type="button" title="All" aria-label="All">
-  <span aria-hidden="true">A</span>
-</button>
-
-            <button class="ls-btn" data-status="Watching" type="button" title="Watching" aria-label="Watching">
-              <i class="fas fa-play"></i>
-            </button>
-            <button class="ls-btn" data-status="Completed" type="button" title="Completed" aria-label="Completed">
-              <i class="fas fa-check"></i>
-            </button>
-            <button class="ls-btn" data-status="On Hold" type="button" title="On Hold" aria-label="On Hold">
-              <i class="fas fa-pause"></i>
-            </button>
-            <button class="ls-btn" data-status="Plan to Watch" type="button" title="Plan to Watch" aria-label="Plan to Watch">
-              <i class="fas fa-clock"></i>
-            </button>
-            <button class="ls-btn" data-status="Dropped" type="button" title="Dropped" aria-label="Dropped">
-              <i class="fas fa-ban"></i>
-            </button>
-          </div>
-
-          <div class="ls-sep" aria-hidden="true"></div>
-
-          <div class="ls-group ls-bottom" aria-label="More">
-            <button id="lsStatsBtn" class="ls-btn ls-tool" type="button" title="Statistics" aria-label="Statistics">
-              <i class="fas fa-chart-bar"></i>
-            </button>
-            <button id="lsSettingsBtn" class="ls-btn ls-tool" type="button" title="Settings" aria-label="Settings">
-              <i class="fas fa-cog"></i>
-            </button>
-          </div>
-        </aside>
+           
+    
 
 
         <div id="animeGrid" class="anime-grid">
@@ -318,26 +268,38 @@
     <!-- BROWSE VIEW (MAL live search) -->
     <main id="browseView" class="view" hidden>
 
-        <!-- Browse tools bar (search only) -->
-        <div class="browse-grid-topbar" aria-label="Browse search">
-          <div class="search-box group">
-            <svg class="icon" aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-            <input type="text" id="browseSearchInput" class="input" placeholder="Search MyAnimeList...">
-            <button id="browseClearSearch" class="clear-search-btn" style="display:none;">Clear All</button>
-          </div>
-        </div>
+      <div class="browse-layout">
 
-        <!-- Results (cards only) -->
-        <div id="browseResultsShell" class="browse-results-shell">
-          <div class="empty-state">
-            <i class="fas fa-search"></i>
-            <h2>Search MyAnimeList</h2>
-            <p>Type a title to start browsing.</p>
+        <!-- LEFT: default browse sections / results grid -->
+        <section class="browse-main" aria-label="Browse content">
+          <div id="browseResultsShell" class="browse-results-shell">
+            <div class="empty-state">
+              <i class="fas fa-search"></i>
+              <h2>Search MyAnimeList</h2>
+              <p>Type a title to start browsing.</p>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <!-- RIGHT: BrowseSearch panel -->
+        <aside id="BrowseSearch" class="browse-search" aria-label="Browse search">
+          <div class="browse-search-inner">
+            <div class="search-box group">
+       
+              <input type="text" id="browseSearchInput" class="input" placeholder="Search MyAnimeList...">
+             <button id="browseClearSearch" class="clear-search-btn" style="display:none;" aria-label="Clear search">
+  <svg class="clear-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M6 6l12 12M18 6L6 18"
+          fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round"></path>
+  </svg>
+</button>
+
+            </div>
+          </div>
+        </aside>
+
+      </div>
 
     </main>
 
@@ -1310,6 +1272,11 @@
 
 
     <script src="app.js"></script>
+  <footer class="site-footer" aria-label="Site footer">
+    <div class="site-footer-inner">
+      <span class="footer-pill">AniTrack Project</span>
+      <span class="footer-copy">© 2026 AniTrack. All rights reserved.</span>
+    </div>
+  </footer>
 </body>
-
 </html>
