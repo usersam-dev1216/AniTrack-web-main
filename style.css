@@ -378,9 +378,9 @@ body.route-settings .settings-nav-item:hover{
 
 /* selected row */
 body.route-settings .settings-nav-item.active{
-  background: rgba(255,255,255,.90);   /* keep white when selected */
-  color: #0b0b12;                      /* readable text on white */
-  border-color: rgba(255,255,255,.70);
+ 
+  color: var(--accent-3)
+ 
 }
 
 /* make the icon tile still visible on white */
