@@ -276,6 +276,48 @@ const settingsFab = $('#settingsFab');
 const AUTH_API_BASE = 'https://anitrack-auth.usersam1216.workers.dev';
 const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot';
 
+// -------------------- LIST (D1 list worker + JWT from auth) --------------------
+// IMPORTANT: set this to your *list worker* URL (the worker that has /list, /list/add, etc.)
+const LIST_API_BASE = 'https://anitrack-userlist.usersam1216.workers.dev';
+
+let __listJwt = null; // keep in-memory (simple + safe)
+
+async function getListJwt({ force = false } = {}) {
+  if (__listJwt && !force) return __listJwt;
+
+  // Uses your auth cookie session to mint a short-lived JWT
+  const res = await authFetch('/auth/list-token', { method: 'GET' });
+  const data = await __safeJson(res);
+
+  if (!res.ok || !data?.ok || !data?.token) {
+    __listJwt = null;
+    throw new Error(data?.error || `Failed to get list token (${res.status})`);
+  }
+
+  __listJwt = data.token;
+  return __listJwt;
+}
+
+async function listFetch(path, init = {}) {
+  const token = await getListJwt();
+  const headers = {
+    "content-type": "application/json",
+    ...(init.headers || {}),
+    Authorization: `Bearer ${token}`,
+  };
+
+  let res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers });
+
+  // If token expired, refresh once and retry
+  if (res.status === 401) {
+    const fresh = await getListJwt({ force: true });
+    const headers2 = { ...headers, Authorization: `Bearer ${fresh}` };
+    res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers: headers2 });
+  }
+
+  return res;
+}
+
 // -------------------- LIST (Worker + D1; stores only MAL IDs) --------------------
 // Put your NEW list worker url here (example placeholder):
 const LIST_API_BASE = 'https://anitrack-list.usersam1216.workers.dev';
@@ -306,6 +348,47 @@ let __authUser = null;
 
 function __safeJson(res) {
   return res.json().catch(() => ({}));
+}
+
+/* -------------------- LIST JWT + LIST FETCH -------------------- */
+
+let __listJwt = null;
+
+async function getListJwt({ force = false } = {}) {
+  if (__listJwt && !force) return __listJwt;
+
+  // call AUTH worker (cookie-based) to mint JWT
+  const res = await authFetch('/auth/list-token', { method: 'GET' });
+  const j = await __safeJson(res);
+
+  if (!res.ok || !j?.ok || !j?.token) {
+    __listJwt = null;
+    throw new Error(j?.error || `list_token_failed_${res.status}`);
+  }
+
+  __listJwt = j.token;
+  return __listJwt;
+}
+
+async function listFetch(path, init = {}) {
+  // calls LIST worker (Bearer-based)
+  const token = await getListJwt();
+  const headers = {
+    "content-type": "application/json",
+    ...(init.headers || {}),
+    "authorization": `Bearer ${token}`,
+  };
+
+  let res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers });
+
+  // if expired, refresh once
+  if (res.status === 401) {
+    const fresh = await getListJwt({ force: true });
+    const headers2 = { ...headers, "authorization": `Bearer ${fresh}` };
+    res = await fetch(`${LIST_API_BASE}${path}`, { ...init, headers: headers2 });
+  }
+
+  return res;
 }
 
 function getCachedAuthUser() {
@@ -345,14 +428,19 @@ function authUrl(path) {
   return `${AUTH_API_BASE}${path}`;
 }
 
-async function authFetch(path, init = {}) {
-  const headers = { ...(init.headers || {}) };
-  return fetch(authUrl(path), {
+function authFetch(path, init = {}) {
+  const headers = {
+    "content-type": "application/json",
+    ...(init.headers || {}),
+  };
+
+  return fetch(`${AUTH_API_BASE}${path}`, {
     ...init,
     headers,
-    credentials: 'include'
+    credentials: "include", // IMPORTANT: sends/receives the cookie session
   });
 }
+
 
 function setAuthError(el, msg) {
   if (!el) return;
@@ -424,43 +512,44 @@ async function listFetch(path, init = {}) {
 // Loads MAL IDs from cloud and makes sure your local "animeList" contains those IDs.
 // This does NOT change your UI design — it just ensures #list has the right items.
 async function loadListFromCloudAndHydrate() {
-  // 1) fetch ids
+  // only if logged in
+  if (!isUserLoggedIn()) return;
+
   const res = await listFetch('/list', { method: 'GET' });
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok || !j?.ok) throw new Error(j?.error || `list_fetch_failed_${res.status}`);
+  const j = await __safeJson(res);
 
-  const malIds = Array.isArray(j.malIds) ? j.malIds : [];
-  const ids = malIds.map(Number).filter(n => Number.isFinite(n) && n > 0);
+  if (!res.ok || !j?.ok) {
+    throw new Error(j?.error || `list_fetch_failed_${res.status}`);
+  }
 
-  // 2) Make sure local animeList contains these entries.
-  //    Your app already understands anime objects by id; we’ll create placeholders
-  //    and let your existing MAL syncing fill details (you already have MAL auto sync).
-  const existing = new Set((animeList || []).map(a => String(a.id)));
+  const items = Array.isArray(j.items) ? j.items : [];
+  const ids = items
+    .map(x => Number(x?.mal_id))
+    .filter(n => Number.isFinite(n) && n > 0);
+
+  // Merge into local list as placeholders.
+  // Your existing MAL auto-sync can later enrich details.
+  const existing = new Set((animeList || []).map(a => String(a?.id)));
+
   let added = 0;
-
-  for (const id of ids) {
-    const key = String(id);
+  for (const malId of ids) {
+    const key = `mal:${malId}`;
     if (existing.has(key)) continue;
 
-    // minimal placeholder; your MAL sync will enrich it later
     (animeList || (animeList = [])).push({
-      id,
-      title: `MAL #${id}`,
-      image: '',
+      id: key,
+      malId,
+      title: `MAL #${malId}`,
       subtitle: '',
-      startDate: '',
-      endDate: '',
-      rating: '',
-      status: 'Planned',
-      isFavorite: false,
+      image: '',
+      status: (items.find(i => Number(i?.mal_id) === malId)?.status) || 'Plan to Watch',
       relations: [],
+      isFavorite: false
     });
     added++;
   }
 
-  if (added > 0) {
-    saveToLocalStorage?.();
-  }
+  if (added) saveToLocalStorage();
 }
 
 
