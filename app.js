@@ -90,14 +90,10 @@ function __ensureMalScoreForPill(anime, pillEl) {
     return;
   }
 
-  // Otherwise fetch mean from MAL (via your worker), once per malId
   const malId = String(anime?.malId ?? anime?.mal_id ?? '').trim();
-  if (!malId) {
-    pillEl.textContent = 'N/A';
-    return;
-  }
+  if (!malId) { pillEl.textContent = 'N/A'; return; }
 
-  pillEl.textContent = '…'; // loading placeholder
+  pillEl.textContent = '…';
 
   let p = __malScorePromises.get(malId);
   if (!p) {
@@ -116,6 +112,7 @@ function __ensureMalScoreForPill(anime, pillEl) {
     }
   });
 }
+
 
 /* ---------------------------- DOM: Main Elements -------------------------- */
 // Grid
@@ -572,6 +569,7 @@ async function __fetchMalMeta(malId){
     return { totalEpisodes: total, image: img };
   } catch { return null; }
 }
+
 
 async function openUserEntryModalFromMalId(malId){
   const mid = Number(malId);
@@ -9262,8 +9260,7 @@ function init() {
   
   renderAnimeCards();
   initSidebarInfoRotator();
-  startMALAutoSync(); // <— kick off background sweeps
-
+  
   // NEW: make Home the opening “page”
   initRouting();
   initBrowseSearch();
