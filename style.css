@@ -2907,7 +2907,7 @@ body.route-list .anime-card:hover .card-overlay-bottom {
   width: min(1200px, 92vw);
   padding: 34px 34px 26px;
   border-radius: 18px;
-  background: rgba(0,0,0,.52);
+  background: rgba(255, 255, 255, .05);
   backdrop-filter: blur(28px);
   box-shadow: 0 24px 90px rgba(0,0,0,.55);
 }
@@ -3011,7 +3011,7 @@ body.route-list .anime-card:hover .card-overlay-bottom {
 }
 
 #browseTrackModal .btm-btn{
-  min-width: 70px;
+  min-width: 80px;
   height: 30px;
   border-radius: 3px;
   border: 0;
