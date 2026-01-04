@@ -6422,7 +6422,7 @@ body.route-profile .profile-main{
 body.route-profile .profile-avatar{
   width: 200px;
   aspect-ratio: 1 / 1;
-  border-radius: 15px;
+  border-radius: 999px;
   
   background: rgba(255, 255, 255, .05);
   display: flex;
