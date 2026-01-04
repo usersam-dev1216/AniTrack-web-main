@@ -2914,7 +2914,7 @@ body.route-list .anime-card:hover .card-overlay-bottom {
 
 #browseTrackModal .btm-layout{
   display: grid;
-  grid-template-columns: 320px 260px 260px 1fr;
+  grid-template-columns: 260px 260px 260px 1fr;
   gap: 28px;
   align-items: start;
 }
