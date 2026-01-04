@@ -6403,8 +6403,8 @@ body.route-profile .profile-cover{
 }
 
 body.route-profile .profile-cover-title{
-  font-weight: 900;
-  font-size: clamp(44px, 5.2vw, 86px);
+  font-weight: 700;
+  font-size: large;
   letter-spacing: 0.5px;
   color: rgba(0,0,0,0.92);
   text-align: center;
@@ -6413,14 +6413,14 @@ body.route-profile .profile-cover-title{
 /* avatar + text row */
 body.route-profile .profile-main{
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 222px 1fr;
   gap: 26px;
   align-items: start;
 }
 
 /* display picture placeholder */
 body.route-profile .profile-avatar{
-  width: 300px;
+  width: 222px;
   aspect-ratio: 1 / 1;
   border-radius: 28px;
   border: 4px solid rgba(0,0,0,0.95);
