@@ -6406,7 +6406,7 @@ body.route-profile .profile-cover-title{
   font-weight: 700;
   font-size: large;
   letter-spacing: 0.5px;
-  color: rgba(0,0,0,0.92);
+  
   text-align: center;
 }
 
@@ -6433,7 +6433,7 @@ body.route-profile .profile-avatar{
 body.route-profile .profile-avatar-text{
   font-weight: 900;
   line-height: 1.05;
-  color: rgba(0,0,0,0.92);
+
   text-align: center;
 }
 
