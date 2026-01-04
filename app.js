@@ -822,21 +822,24 @@ function syncAuthUI() {
     headerProfileLink1.setAttribute('href', logged ? '#profile' : '#userlogin');
   }
 
-   if (headerProfileLink2) {
+  if (headerProfileLink2) {
     headerProfileLink2.textContent = logged ? 'Account' : 'Sign up';
     headerProfileLink2.setAttribute('href', logged ? '#account' : '#usersignup');
   }
 
-  // ----- Profile page placeholders -----
-  const profileDisplayName = $('#profileDisplayName');
-  if (profileDisplayName && logged) {
-    profileDisplayName.textContent = (u.username || u.email || 'User');
+  // ----- Profile placeholders -----
+  const profileDisplayName = document.getElementById('profileDisplayName');
+  if (profileDisplayName) {
+    profileDisplayName.textContent = logged
+      ? (u.username || u.email || 'User')
+      : 'Sample User Name On Display';
   }
 
   // body gate for CSS ("+ only when logged in")
   document.body.classList.toggle('is-logged-in', logged);
 
   syncAccountFields();
+
 
   // Make sure cards update instantly after login/logout
   try { renderHomePage?.(); } catch {}
