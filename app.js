@@ -13,7 +13,7 @@ const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 /* ---------------------------- AniTrack API (MAL Middleman) ---------------------------- */
-const MAL_API_BASE = 'https://anitrack-api.usersam1216.workers.dev'; // <-- your Worker URL
+const MAL_API_BASE = 'https://anitrack-library.usersam1216.workers.dev';
 
 function malApiUrl(path) {
   return `${MAL_API_BASE}${path}`;
@@ -362,9 +362,7 @@ function authUrl(path) {
 }
 
 function authFetch(path, init = {}) {
-  const headers = {
-    ...(init.headers || {}),
-  };
+  const headers = { ...(init.headers || {}) };
 
   // only set content-type if we actually send a body
   if (init.body && !headers['content-type'] && !headers['Content-Type']) {
@@ -377,6 +375,7 @@ function authFetch(path, init = {}) {
     credentials: "include",
   });
 }
+
 
 
 
@@ -448,19 +447,21 @@ function syncAccountFields() {
 }
 
 async function listFetch(path, init = {}) {
-  const url = LIST_API_BASE + path;
-
   const headers = { ...(init.headers || {}) };
+
+  // only set content-type when we send a body
   if (init.body && !headers['content-type'] && !headers['Content-Type']) {
     headers['content-type'] = 'application/json';
   }
 
-  return fetch(url, {
+  return fetch(`${LIST_API_BASE}${path}`, {
     ...init,
-    credentials: 'include',
     headers,
+    credentials: 'include',
   });
 }
+
+
 
 
 
@@ -2461,20 +2462,7 @@ function syncListToCloudDebounced() {
 
 
 
-async function listFetch(path, init = {}) {
-  const headers = { ...(init.headers || {}) };
 
-  // only set content-type when we send a body
-  if (init.body && !headers['content-type'] && !headers['Content-Type']) {
-    headers['content-type'] = 'application/json';
-  }
-
-  return fetch(`${LIST_API_BASE}${path}`, {
-    ...init,
-    headers,
-    credentials: 'include',
-  });
-}
 
 
 
