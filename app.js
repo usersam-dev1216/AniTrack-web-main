@@ -105,6 +105,19 @@ const animeGrid = $('#animeGrid');
 // Add/Edit modal
 const addEditModal     = $('#addEditModal');
 const animeForm        = $('#animeForm');
+
+// Browse "+" track modal (Browse-only)
+const browseTrackModal         = $('#browseTrackModal');
+const browseTrackCoverImg      = $('#browseTrackCoverImg');
+const browseTrackCoverFallback = $('#browseTrackCoverFallback');
+const browseTrackMalId         = $('#browseTrackMalId');
+const browseTrackStatus        = $('#browseTrackStatus');
+const browseTrackScore         = $('#browseTrackScore');
+const browseTrackStartDate     = $('#browseTrackStartDate');
+const browseTrackFinishDate    = $('#browseTrackFinishDate');
+const browseTrackProgress      = $('#browseTrackProgress');
+const browseTrackRewatches     = $('#browseTrackRewatches');
+const browseTrackNotes         = $('#browseTrackNotes');
 const addSeasonBtn     = $('#addSeasonBtn');
 const seasonContainer  = $('#seasonContainer');
 const fillByMalBtn     = $('#fillByMalBtn');
@@ -7803,6 +7816,38 @@ const BROWSE_HOME_LIMIT = 15;
 const BROWSE_HOME_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 
+function openBrowseTrackModalFromCard(card){
+  if (!browseTrackModal || !card) return;
+
+  const malId = card.getAttribute('data-mal-id') || '';
+  if (browseTrackMalId) browseTrackMalId.value = malId;
+
+  // reset fields (simple defaults for now)
+  if (browseTrackStatus) browseTrackStatus.value = '';
+  if (browseTrackScore) browseTrackScore.value = '0';
+  if (browseTrackStartDate) browseTrackStartDate.value = '';
+  if (browseTrackFinishDate) browseTrackFinishDate.value = '';
+  if (browseTrackProgress) browseTrackProgress.value = '';
+  if (browseTrackRewatches) browseTrackRewatches.value = '';
+  if (browseTrackNotes) browseTrackNotes.value = '';
+
+  // fill cover from the browse card if available
+  const imgEl = card.querySelector('.browse-entry-cover img');
+  const src = imgEl?.getAttribute('src') || '';
+
+  if (src && browseTrackCoverImg && browseTrackCoverFallback){
+    browseTrackCoverImg.src = src;
+    browseTrackCoverImg.hidden = false;
+    browseTrackCoverFallback.hidden = true;
+  } else if (browseTrackCoverImg && browseTrackCoverFallback){
+    browseTrackCoverImg.removeAttribute('src');
+    browseTrackCoverImg.hidden = true;
+    browseTrackCoverFallback.hidden = false;
+  }
+
+  browseTrackModal.classList.add('active');
+}
+
 function initBrowseSearch() {
   const input = document.getElementById('browseSearchInput');
   const clear = document.getElementById('browseClearSearch');
@@ -7814,23 +7859,25 @@ function initBrowseSearch() {
     initBrowseSearch.__boundClicks = true;
 
 shell.addEventListener('click', (e) => {
-  // "+" is a placeholder for now — don't open entrydetails if it's clicked
+  const card = e.target.closest('.browse-anime-card');
+  if (!card) return;
+
+  // "+" opens the tracking modal (Browse-only)
   if (e.target.closest('.browse-entry-plus')) {
     e.preventDefault();
     e.stopPropagation();
+    openBrowseTrackModalFromCard(card);
     return;
   }
 
   // Normal click on a browse card opens EntryDetails
-  const card = e.target.closest('.browse-anime-card');
-  if (!card) return;
-
   const malId = card.getAttribute('data-mal-id');
   if (!malId) return;
 
   e.preventDefault();
   openEntryDetailsMAL(malId);
 });
+
 
 // Right-click on browse cards => "List edit" menu
 shell.addEventListener('contextmenu', (e) => {

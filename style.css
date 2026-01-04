@@ -23,7 +23,7 @@
   --transition-2: 600ms cubic-bezier(.16,1,.3,1);
 
   /* Global centered layout (neat stage) */
-  --app-max: 1350px;
+  --app-max: 1430px;
   --app-gutter: 22px;
   --app-radius: 22px;
 }
@@ -109,7 +109,7 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
 /* single-column "list grid" */
 #browseView .browse-results-grid{
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   padding: 18px 18px;
 }
@@ -124,7 +124,7 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
   align-items: center;
   gap: 22px;
 
-  padding: 18px 20px;
+  padding: 16px 16px;
   border-radius: 12px;
 
   border: 1px solid rgba(255,255,255,.10);
@@ -563,8 +563,8 @@ body.route-browse #browseView{
 /* ===================== BROWSE: 2-column layout (1350px) ===================== */
 body.route-browse .browse-layout{
   width: 100%;
-  max-width: 1350px;
-  margin: 0 auto;
+  
+  
   padding: 22px 16px 46px;
 
   display: grid;
@@ -2900,6 +2900,148 @@ body.route-list .anime-card:hover .card-overlay-bottom {
   position: static;
   top: auto;
   right: auto;
+}
+
+/* ===================== Browse Track Modal (screenshot layout) ===================== */
+#browseTrackModal .modal-content.browse-track-modal{
+  width: min(1200px, 92vw);
+  padding: 34px 34px 26px;
+  border-radius: 18px;
+  background: rgba(0,0,0,.52);
+  backdrop-filter: blur(28px);
+  box-shadow: 0 24px 90px rgba(0,0,0,.55);
+}
+
+#browseTrackModal .btm-layout{
+  display: grid;
+  grid-template-columns: 320px 260px 260px 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+#browseTrackModal .btm-cover{
+  width: 100%;
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(255,255,255,.04);
+  display: grid;
+  place-items: center;
+}
+
+#browseTrackModal .btm-cover img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+#browseTrackModal .btm-cover-fallback{
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: rgba(255,255,255,.88);
+  font-weight: 800;
+  font-size: 56px;
+  line-height: 1.05;
+  text-align: left;
+  padding-left: 34px;
+}
+
+#browseTrackModal .btm-col{
+  display: grid;
+  gap: 26px;
+}
+
+#browseTrackModal .btm-field label,
+#browseTrackModal .btm-notes label{
+  display: block;
+  font-size: 14px;
+  color: rgba(255,255,255,.55);
+  margin-bottom: 8px;
+  letter-spacing: .2px;
+}
+
+#browseTrackModal .btm-control{
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.30);
+  color: rgba(255,255,255,.85);
+  outline: none;
+}
+
+#browseTrackModal .btm-control:focus{
+  border-color: rgba(255,255,255,.18);
+  background: rgba(0,0,0,.38);
+}
+
+#browseTrackModal .btm-notes{
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  min-height: 330px;
+}
+
+#browseTrackModal .btm-notes-box{
+  width: 100%;
+  height: 100%;
+  min-height: 330px;
+  resize: none;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.30);
+  color: rgba(255,255,255,.85);
+  outline: none;
+}
+
+#browseTrackModal .btm-notes-box:focus{
+  border-color: rgba(255,255,255,.18);
+  background: rgba(0,0,0,.38);
+}
+
+#browseTrackModal .btm-actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 18px;
+  margin-top: 26px;
+}
+
+#browseTrackModal .btm-btn{
+  min-width: 70px;
+  height: 30px;
+  border-radius: 3px;
+  border: 0;
+  font-weight: 600;
+  font-size: small;
+  cursor: pointer;
+}
+
+#browseTrackModal .btm-danger{
+  background: #8b0017;
+  color: #fff;
+}
+
+#browseTrackModal .btm-save{
+  background: #ffc0d3;
+  color: black;
+}
+
+/* responsive */
+@media (max-width: 1100px){
+  #browseTrackModal .btm-layout{
+    grid-template-columns: 1fr 1fr;
+  }
+  #browseTrackModal .btm-notes{
+    grid-column: 1 / -1;
+  }
+  #browseTrackModal .btm-cover{
+    grid-column: 1 / -1;
+    max-width: 520px;
+  }
 }
 
 .modal-title {
@@ -6492,8 +6634,7 @@ body.route-settings .header-shell{
 }
 
 .site-footer-inner{
-  max-width: 1350px;         /* matches your browse/page container */
-  margin: 0 auto;
+
   padding: 16px 16px;
 
   display: flex;
