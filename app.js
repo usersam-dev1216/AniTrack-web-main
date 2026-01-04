@@ -822,9 +822,15 @@ function syncAuthUI() {
     headerProfileLink1.setAttribute('href', logged ? '#profile' : '#userlogin');
   }
 
-  if (headerProfileLink2) {
+   if (headerProfileLink2) {
     headerProfileLink2.textContent = logged ? 'Account' : 'Sign up';
     headerProfileLink2.setAttribute('href', logged ? '#account' : '#usersignup');
+  }
+
+  // ----- Profile page placeholders -----
+  const profileDisplayName = $('#profileDisplayName');
+  if (profileDisplayName && logged) {
+    profileDisplayName.textContent = (u.username || u.email || 'User');
   }
 
   // body gate for CSS ("+ only when logged in")
