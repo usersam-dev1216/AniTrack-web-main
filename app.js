@@ -7814,6 +7814,13 @@ function initBrowseSearch() {
     initBrowseSearch.__boundClicks = true;
 
 shell.addEventListener('click', (e) => {
+  // "+" is a placeholder for now — don't open entrydetails if it's clicked
+  if (e.target.closest('.browse-entry-plus')) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
   // Normal click on a browse card opens EntryDetails
   const card = e.target.closest('.browse-anime-card');
   if (!card) return;
@@ -7973,7 +7980,6 @@ function renderBrowseHomeFromData({ upcoming = [], topAiring = [], mostPopular =
     section('Upcoming', upcoming);
 }
 
-
 function renderBrowseCardHTML(it){
   const malId = it?.mal_id ?? it?.id ?? '';
   const title = (it?.title || it?.title_english || it?.title_japanese || 'Untitled').toString().trim() || 'Untitled';
@@ -7984,48 +7990,65 @@ function renderBrowseCardHTML(it){
     it?.images?.jpg?.image_url ||
     '';
 
-  // Score → pill
+  // MAL score
   const s = (it?.score == null) ? '' : String(it.score).trim();
   const scoreNum = (s !== '' && Number.isFinite(+s) && (+s > 0)) ? +s : null;
   const ratingDisplay = (scoreNum != null) ? scoreNum.toFixed(2) : 'N/A';
 
-  // Meta line like: "TV • Fall 2024"
+  // Format
   const rawType = String(it?.type || '').trim();
   let formatDisplay = 'N/A';
   if (rawType) {
-    if (/^tv$/i.test(rawType)) formatDisplay = 'TV';
-    else if (/^ona$/i.test(rawType)) formatDisplay = 'ONA';
-    else if (/^ova$/i.test(rawType)) formatDisplay = 'OVA';
-    else if (/tv[\s-]*special/i.test(rawType)) formatDisplay = 'Special';
-    else formatDisplay = rawType.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    // normalize weird API variants like "Tv_Special"
+    const norm = rawType.replace(/_/g, ' ').trim();
+
+    if (/^tv$/i.test(norm)) formatDisplay = 'TV';
+    else if (/^ona$/i.test(norm)) formatDisplay = 'ONA';
+    else if (/^ova$/i.test(norm)) formatDisplay = 'OVA';
+    else if (/^tv\s*special$/i.test(norm)) formatDisplay = 'TV Special';
+    else formatDisplay = norm.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
   }
 
+  // Genres / themes
+  const genres = Array.isArray(it?.genres) ? it.genres.map(g => (g?.name || '').trim()).filter(Boolean) : [];
+  const themes = Array.isArray(it?.themes) ? it.themes.map(t => (t?.name || '').trim()).filter(Boolean) : [];
+
+  const genreLine = genres.length ? genres.slice(0, 4).join(', ') : 'N/A';
+  const themeLine = themes.length ? themes.slice(0, 3).join(', ') : '';
+
+  // Season + episodes (+ duration if ever available)
   const premiered = String(it?.season || it?.aired?.string || '').trim() || 'N/A';
-  const metaLine = `${formatDisplay} • ${premiered}`;
+  const eps = (it?.episodes == null || it?.episodes === '') ? 'N/A' : String(it.episodes);
+  const dur = (it?.duration ? String(it.duration).trim() : ''); // may be empty in current payload
+
+  const sub1 = `${formatDisplay} • ${escapeHtml(genreLine)}${themeLine ? ` • ${escapeHtml(themeLine)}` : ''}`;
+  const sub2 = `${premiered} • ${eps} Eps${dur ? ` • ${escapeHtml(dur)}` : ''}`;
 
   return `
-    <div class="anime-card browse-anime-card" data-mal-id="${malId}">
-      ${quickAddBtnHTML(malId)}
-
-      <div class="card-image">
-        ${img ? `<img src="${img}" alt="${title}">` : '<i class="fas fa-image"></i>'}
+    <div class="browse-entry-card browse-anime-card" data-mal-id="${malId}">
+      <div class="browse-entry-cover">
+        ${img ? `<img src="${img}" alt="${escapeHtml(title)}">` : `<div class="browse-entry-cover-fallback"><i class="fas fa-image"></i></div>`}
       </div>
 
-      <div class="card-overlay">
-        <div class="card-rating-pill">${ratingDisplay}</div>
-        <div class="card-overlay-bottom">
-          <h3 class="card-overlay-title">${title}</h3>
-          <div class="card-overlay-meta">${metaLine}</div>
+      <div class="browse-entry-body">
+        <div class="browse-entry-text">
+          <div class="browse-entry-title">${escapeHtml(title)}</div>
+          <div class="browse-entry-sub">${sub1}</div>
+          <div class="browse-entry-sub">${escapeHtml(sub2)}</div>
+        </div>
+
+        <div class="browse-entry-score">
+          <div class="browse-entry-score-num">${escapeHtml(ratingDisplay)}</div>
+          <div class="browse-entry-score-lab">MAL</div>
         </div>
       </div>
+
+      <button class="browse-entry-plus" type="button" aria-label="Add (coming soon)" title="Add (coming soon)">
+        <i class="fas fa-plus"></i>
+      </button>
     </div>
   `;
 }
-
-
-
-
-
 
 
 async function renderBrowseHome() {

@@ -98,7 +98,7 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
   display: none !important;
 }
 
-/* ===================== BROWSE (cards only, no boxes) ===================== */
+/* ===================== BROWSE (list-grid cards like mock) ===================== */
 #browseView .browse-results-shell{
   padding: 0;
   background: transparent;
@@ -106,66 +106,152 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
   box-shadow: none;
 }
 
-/* If your JS creates a grid wrapper, this keeps it neat */
+/* single-column "list grid" */
 #browseView .browse-results-grid{
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   padding: 18px 18px;
 }
 
-/* ===================== Browse cards = Home row card design ===================== */
-#browseView .browse-results-grid .anime-card{
+/* the new browse card */
+#browseView .browse-entry-card{
+  position: relative;
   width: 100%;
-  aspect-ratio: 1 / 1;
-  height: auto;
+  min-height: 170px;
 
-  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+
+  padding: 18px 20px;
+  border-radius: 12px;
+
   border: 1px solid rgba(255,255,255,.10);
-  background: rgba(0,0,0,.18);
-  box-shadow: 0 16px 50px rgba(0,0,0,.45);
+  background: linear-gradient(180deg, rgba(10,14,26,.86), rgba(10,14,26,.56));
+  box-shadow: 0 16px 60px rgba(0,0,0,.45);
+
   overflow: hidden;
+  cursor: pointer;
 
   transition: transform .15s ease, border-color .15s ease, background .15s ease;
 }
 
-#browseView .browse-results-grid .anime-card:hover{
+#browseView .browse-entry-card:hover{
   transform: translateY(-2px);
   border-color: rgba(255,255,255,.16);
-  background: rgba(0,0,0,.24);
+  background: linear-gradient(180deg, rgba(10,14,26,.86), rgba(10,14,26,.56));
 }
 
-/* same “bottom-left text” behavior as Home row */
-#browseView .browse-results-grid .anime-card .card-overlay{
-  opacity: 1;
-  justify-content: flex-end;
+/* cover 5:4 with radius 18px */
+#browseView .browse-entry-cover{
+  flex: 0 0 auto;
+  height: 175px;
+  aspect-ratio: 4 / 5;
+  border-radius: 10px;
+  overflow: hidden;
+ 
+  background: rgba(255,255,255,.04);
 }
 
-/* Home row hides these — do the same in Browse grid */
-#browseView .browse-results-grid .anime-card .card-rating-pill,
-#browseView .browse-results-grid .anime-card .bulk-check-card,
-#browseView .browse-results-grid .anime-card .card-favorite-heart{
-  display: none !important;
-}
-
-#browseView .browse-results-grid .anime-card .card-overlay-bottom{
+#browseView .browse-entry-cover img{
   width: 100%;
-  padding: 0;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
-#browseView .browse-results-grid .anime-card .card-overlay-title{
+#browseView .browse-entry-cover-fallback{
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: rgba(255,255,255,.55);
+  font-size: 22px;
+}
+
+/* body area */
+#browseView .browse-entry-body{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 34px;
+}
+
+#browseView .browse-entry-text{
+  min-width: 0;
+}
+
+#browseView .browse-entry-title{
+  font-size: larger;
+  font-weight: 700;
+  color: var(--accent-3);
+  letter-spacing: .2px;
+
+  display: -webkit-box;
+  -webkit-line-clamp: 2;      /* "..." after 2 lines */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+#browseView .browse-entry-sub{
+  margin-top: 8px;
+  color: rgba(255,255,255,.70);
+  font-size: smaller;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* score block (big number + MAL label) */
+#browseView .browse-entry-score{
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+#browseView .browse-entry-score-num{
+  font-size: 2.1rem;
+  font-weight: 900;
+  color: #acbcfa;
+  letter-spacing: .2px;
+}
+
+#browseView .browse-entry-score-lab{
   font-size: .95rem;
-  font-weight: 500;
-  margin: 0;
+  font-weight: 700;
+  color: rgba(255,255,255,.55);
+  letter-spacing: .2px;
 }
 
-#browseView .browse-results-grid .anime-card .card-overlay-meta{
-  margin-top: 4px;
-  font-size: .82rem;
-  opacity: .78;
+/* "+" placeholder button (bottom-right) */
+#browseView .browse-entry-plus{
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+
+  border: 0;
+  background: rgba(251,207,232,.95);
+  color: rgba(20,10,20,.95);
+
+  display: grid;
+  place-items: center;
+
+  cursor: default; /* placeholder */
+  box-shadow: 0 16px 40px rgba(0,0,0,.35);
 }
 
-
+#browseView .browse-entry-plus i{
+  font-size: 15px;
+  line-height: 1;
+}
 
 /* Optional: if empty-state looks like a box in your build, de-box it */
 #browseView .empty-state{
@@ -5503,7 +5589,7 @@ ease;
   gap: 12px;
   font-size: 1.15rem;
   font-weight: 900;
-  color: var(--text-primary);
+  color: #ffbdf0;
   letter-spacing: .2px;
 }
 
@@ -5533,7 +5619,7 @@ ease;
   flex: 0 0 110px;       /* keeps all values aligned like your screenshot */
   white-space: nowrap;   /* prevents label wrapping */
   font-weight: 600;
-  color: var(--accent-3)
+  color: white;
 }
 
 .entrydetails-page .detail-value {
