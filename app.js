@@ -19,6 +19,26 @@ function malApiUrl(path) {
   return `${MAL_API_BASE}${path}`;
 }
 
+const __fullPayloadPromises = new Map();
+
+/**
+ * Fetches /api/anime/:id/full once per malId (client-side memoization).
+ * Server-side is also cached in D1 (your MAL-once plan).
+ */
+function getFullPayloadCached(malId, { signal } = {}) {
+  const key = String(malId ?? '').trim();
+  if (!key) return Promise.resolve(null);
+
+  let p = __fullPayloadPromises.get(key);
+  if (!p) {
+    p = fetch(malApiUrl(`/api/anime/${encodeURIComponent(key)}/full`), { signal })
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null);
+    __fullPayloadPromises.set(key, p);
+  }
+  return p;
+}
+
 /* --- MAL score hydration for cards (fills missing scores; avoids "" -> 0.00) --- */
 var __malScorePromises = new Map();
 var __malScoreSaveTimer = null;
@@ -81,9 +101,8 @@ function __ensureMalScoreForPill(anime, pillEl) {
 
   let p = __malScorePromises.get(malId);
   if (!p) {
-    p = fetch(malApiUrl(`/api/anime/${encodeURIComponent(malId)}?fields=mean`))
-      .then(r => (r.ok ? r.json() : null))
-      .then(j => __parseMalScore(j?.data?.mean))
+    p = getFullPayloadCached(malId)
+      .then(payload => __parseMalScore(payload?.details?.mean))
       .catch(() => null);
     __malScorePromises.set(malId, p);
   }
@@ -544,10 +563,10 @@ function __getEl(id){ return document.getElementById(id); }
 
 async function __fetchMalMeta(malId){
   try{
-    const r = await fetch(malApiUrl(`/api/anime/${encodeURIComponent(malId)}?fields=num_episodes,main_picture`));
-    if (!r.ok) return null;
-    const j = await r.json();
-    const d = j?.data || j;
+    const payload = await getFullPayloadCached(malId);
+    const d = payload?.details || null;
+    if (!d) return null;
+
     const total = Number(d?.num_episodes || 0) || 0;
     const img = d?.main_picture?.large || d?.main_picture?.medium || '';
     return { totalEpisodes: total, image: img };
@@ -8932,22 +8951,10 @@ function _inferPremiered(d) {
 
 // MAL v2 fetch (expects your malApiUrl worker to proxy MAL)
 async function fetchAnimeById(malId, { signal } = {}) {
-  const fields = [
-    'id','title','main_picture','alternative_titles','synopsis',
-    'mean','media_type','status',
-    'start_date','end_date','start_season',
-    'num_episodes','average_episode_duration',
-    'broadcast','studios','genres',
-    'producers','licensors',
-    'source','rating'
-  ].join(',');
-
-  const url = malApiUrl(`/api/anime/${encodeURIComponent(malId)}?fields=${encodeURIComponent(fields)}`);
-  const res = await fetch(url, { signal });
-
-  if (!res.ok) throw new Error(`MAL details failed: ${res.status}`);
-  const json = await res.json();
-  return json?.data || null;
+  const payload = await getFullPayloadCached(malId, { signal });
+  const d = payload?.details || null;
+  if (!d) throw new Error(`MAL /full failed for id=${malId}`);
+  return d;
 }
 
 // Replace your mapper with a MAL-only mapper that actually populates the fields.
