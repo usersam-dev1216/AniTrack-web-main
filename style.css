@@ -5838,6 +5838,7 @@ ease;
   height: 100%;
   transform-origin: center;
   display: block;
+  padding-inline: 20px;
 }
 
 .entrydetails-page .detail-layout {
