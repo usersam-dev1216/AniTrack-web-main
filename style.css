@@ -1340,7 +1340,7 @@ color: var(--text-secondary);
   height: auto;
 
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,.10);
+  
   background: rgba(0,0,0,.18);
   box-shadow: 0 16px 50px rgba(0,0,0,.45);
   overflow:hidden;
