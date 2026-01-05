@@ -6500,7 +6500,7 @@ body.route-list .list-sidebar{
     0 0 0 3px rgba(194,173,255,0.20);
 }
 
-/* Identity mapping (pfp + fields) */
+/* Identity mapping (PFP + fields) */
 .account-identity{
   display: grid;
   grid-template-columns: 220px 1fr;
