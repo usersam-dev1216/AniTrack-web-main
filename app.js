@@ -465,11 +465,9 @@ async function authUpdateUsername(username) {
   return { res, j };
 }
 
-// NEW: update identity (username + bio + pfp_url) in one request
-// Expecting your API to implement: POST /auth/account  { username?, bio?, pfp_url? }
-// (If your route name differs, change '/auth/account' here.)
-async function authUpdateAccount(payload) {
-  const res = await authFetch('/auth/account', {
+// NEW: update profile (bio + pfpUrl)
+async function authUpdateProfile(payload) {
+  const res = await authFetch('/auth/profile', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload || {})
@@ -964,7 +962,7 @@ function initAuth() {
     location.hash = '#home';
   });
 
-    // NEW: Account save (username + bio + pfp_url)
+      // NEW: Account save (username + bio + pfpUrl)
   const accountForm = accountView?.querySelector('form');
   const accSaveBtn =
     $('#accSaveBtn') ||
@@ -983,72 +981,65 @@ function initAuth() {
 
     const cached = (__authUser || getCachedAuthUser()) || {};
     const currentUsername = (cached.username || '').toString();
-    const currentBio = (cached.bio || '').toString();
+    const currentBio = (cached.bio ?? '').toString();
     const currentPfp = (cached.pfp_url ?? cached.pfpUrl ?? '').toString();
 
     const newUsername = String($('#accUsername')?.value || '').trim();
     const newBio = String($('#accBio')?.value || '').trim();
+
+    // if pencil/remove was used, it overrides; otherwise keep current
     const newPfpUrl = (__pendingPfpUrl !== null ? __pendingPfpUrl : currentPfp).toString().trim();
 
-    // validate username only if changed
+    // username validations (match API)
     if (!newUsername) return showNotification?.('Username cannot be empty.');
     if (newUsername !== currentUsername) {
       if (newUsername.length < 3 || newUsername.length > 24) return showNotification?.('Username must be 3–24 characters.');
       if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) return showNotification?.('Username can only use letters, numbers, underscore.');
     }
 
-    // validate bio length (pick a safe limit; match your API if you set one)
-    if (newBio.length > 500) return showNotification?.('Bio is too long (max 500 chars).');
+    // bio length matches API (your worker uses 1000 max)
+    if (newBio.length > 1000) return showNotification?.('Bio is too long (max 1000 chars).');
 
-    // validate pfp url lightly (optional)
+    // pfp url validation matches API (http/https or empty)
     if (newPfpUrl && !/^https?:\/\//i.test(newPfpUrl)) {
       return showNotification?.('Profile picture URL must start with http:// or https://');
     }
 
-    const changed =
-      newUsername !== currentUsername ||
-      newBio !== currentBio ||
-      newPfpUrl !== currentPfp;
+    const usernameChanged = newUsername !== currentUsername;
+    const profileChanged = (newBio !== currentBio) || (newPfpUrl !== currentPfp);
 
-    if (!changed) return showNotification?.('No changes to save.');
+    if (!usernameChanged && !profileChanged) {
+      return showNotification?.('No changes to save.');
+    }
 
     if (accSaveBtn) accSaveBtn.disabled = true;
 
     try {
-      // Prefer one-shot endpoint
-      let res, j;
-
-      // If you didn’t add /auth/account yet, this will 404 and we’ll fallback to /auth/username.
-      ({ res, j } = await authUpdateAccount({ username: newUsername, bio: newBio, pfp_url: newPfpUrl || null }));
-
-      if (!res.ok || !j?.ok) {
-        // fallback: at least update username if account route isn't there
-        if (res?.status === 404) {
-          const fallback = await authUpdateUsername(newUsername);
-          if (!fallback.res.ok || !fallback.j?.ok) {
-            showNotification?.(`Save failed: ${fallback.j?.error || 'save_failed'}`);
-            return;
-          }
-          // merge local fields if API didn’t support them
-          const merged = { ...(fallback.j.user || {}), bio: newBio, pfp_url: newPfpUrl || null };
-          setAuthUser(merged);
-          __pendingPfpUrl = null;
-          syncAccountFields();
-          syncAuthUI();
-          showNotification?.('Saved (username only; bio/pfp need /auth/account).');
+      // 1) Update username if needed
+      if (usernameChanged) {
+        const { res, j } = await authUpdateUsername(newUsername);
+        if (!res.ok || !j?.ok) {
+          showNotification?.(`Save failed: ${j?.error || 'save_failed'}`);
           return;
         }
-
-        showNotification?.(`Save failed: ${j?.error || 'save_failed'}`);
-        return;
+        if (j?.user) setAuthUser(j.user);
       }
 
-      if (j?.user) setAuthUser(j.user);
+      // 2) Update profile if needed
+      if (profileChanged) {
+        const { res, j } = await authUpdateProfile({ bio: newBio, pfpUrl: newPfpUrl });
+        if (!res.ok || !j?.ok) {
+          showNotification?.(`Save failed: ${j?.error || 'save_failed'}`);
+          return;
+        }
+        if (j?.user) setAuthUser(j.user);
+      }
+
       __pendingPfpUrl = null;
 
       syncAccountFields();
       syncAuthUI();
-      showNotification?.('Account updated.');
+      showNotification?.('Saved.');
     } catch (e) {
       console.error(e);
       showNotification?.('Save failed (network/CORS).');
@@ -1056,6 +1047,54 @@ function initAuth() {
       if (accSaveBtn) accSaveBtn.disabled = false;
     }
   };
+
+  accountForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    doAccountSave();
+  });
+
+  accSaveBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    doAccountSave();
+  });
+
+  // Identity extras (pencil => prompt for URL, remove => clear)
+  accountView?.addEventListener('click', (e) => {
+    const edit = e.target.closest('#accPfpEditBtn');
+    if (edit) {
+      e.preventDefault();
+
+      const cached = (__authUser || getCachedAuthUser()) || {};
+      const currentPfp = (cached.pfp_url ?? cached.pfpUrl ?? '').toString().trim();
+
+      const next = window.prompt('Paste an image URL for your profile picture:', currentPfp);
+      if (next === null) return; // cancelled
+
+      __pendingPfpUrl = String(next || '').trim();
+
+      // instant preview in Account UI
+      const previewUser = { ...cached, pfp_url: __pendingPfpUrl };
+      setAuthUser(previewUser);
+      syncAccountFields();
+      syncAuthUI();
+      return;
+    }
+
+    const remove = e.target.closest('#accPfpRemoveBtn');
+    if (remove) {
+      e.preventDefault();
+
+      __pendingPfpUrl = ''; // clear to empty string (API treats empty as cleared)
+      const cached = (__authUser || getCachedAuthUser()) || {};
+      const previewUser = { ...cached, pfp_url: '' };
+      setAuthUser(previewUser);
+      syncAccountFields();
+      syncAuthUI();
+      showNotification?.('Picture cleared (press Save changes to apply).');
+      return;
+    }
+  });
+
 
   accountForm?.addEventListener('submit', (e) => {
     e.preventDefault();
