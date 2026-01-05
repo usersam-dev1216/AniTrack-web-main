@@ -1646,7 +1646,7 @@ justify-content: space-between;
   border-radius: 999px;
 
   background: transparent;
-  border: 1px solid rgba(255,255,255,.10);
+  border: 1px solid rgba(255, 255, 255, 0);
   color: var(--text-primary);
 
   display: grid;
