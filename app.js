@@ -465,6 +465,19 @@ async function authUpdateUsername(username) {
   return { res, j };
 }
 
+// NEW: update identity (username + bio + pfp_url) in one request
+// Expecting your API to implement: POST /auth/account  { username?, bio?, pfp_url? }
+// (If your route name differs, change '/auth/account' here.)
+async function authUpdateAccount(payload) {
+  const res = await authFetch('/auth/account', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload || {})
+  });
+  const j = await __safeJson(res);
+  return { res, j };
+}
+
 function syncAccountFields() {
   const u = __authUser || getCachedAuthUser();
 
@@ -480,27 +493,25 @@ function syncAccountFields() {
     em.readOnly = true; // email is not editable
   }
 
-  // Bio is not implemented yet (keep it disabled + placeholder)
+  // Bio NOW enabled
   if (bio) {
     bio.value = u?.bio ? String(u.bio) : '';
-    bio.disabled = true;
+    bio.disabled = false;
   }
 
-  // Profile picture placeholder only (no upload/remove logic yet)
+  // Profile picture: accept either pfp_url or pfpUrl
   if (pfpVisual) {
-    const url = u?.pfpUrl ? String(u.pfpUrl).trim() : '';
+    const url = (u?.pfp_url ?? u?.pfpUrl ?? '').toString().trim();
+
+    pfpVisual.classList.toggle('has-image', !!url);
     if (url) {
-      pfpVisual.innerHTML = `
-        <img src="${esc(url)}" alt="Profile picture" style="width:100%; height:100%; object-fit:cover;">
-        <button id="accPfpEditBtn" class="account-pfp-edit" type="button" aria-label="Edit profile picture" title="Edit profile picture">
-          <i class="fas fa-pen"></i>
-        </button>
-      `;
+      pfpVisual.style.backgroundImage = `url("${url}")`;
     } else {
-      // keep the placeholder markup from HTML (do nothing)
+      pfpVisual.style.backgroundImage = '';
     }
   }
 }
+
 
 async function listFetch(path, init = {}) {
   const headers = { ...(init.headers || {}) };
@@ -867,12 +878,42 @@ function syncAuthUI() {
     headerProfileLink2.setAttribute('href', logged ? '#account' : '#usersignup');
   }
 
-  // ----- Profile placeholders -----
+  // ----- Profile placeholders / user data -----
   const profileDisplayName = document.getElementById('profileDisplayName');
   if (profileDisplayName) {
     profileDisplayName.textContent = logged
       ? (u.username || u.email || 'User')
       : 'Sample User Name On Display';
+  }
+
+  // profile bio paragraph has no id in HTML, so we target the class
+  const profileBio = document.querySelector('#profileView .profile-bio');
+  if (profileBio) {
+    if (logged) {
+      const b = (u?.bio ?? '').toString().trim();
+      profileBio.textContent = b || 'No bio yet.';
+    } else {
+      profileBio.textContent =
+        'Sample Bio Text Goes Here For A Preview Reference. Later on, Users will be able to add their own bio after the next update. For Now, This sample text will populate the filed and show how it will look in the main profile page.';
+    }
+  }
+
+  // avatar also has no id; render pfp as background-image when present
+  const profileAvatar = document.querySelector('#profileView .profile-avatar');
+  if (profileAvatar) {
+    const url = logged ? (u?.pfp_url ?? u?.pfpUrl ?? '').toString().trim() : '';
+    if (url) {
+      profileAvatar.style.backgroundImage = `url("${url}")`;
+      profileAvatar.style.backgroundSize = 'cover';
+      profileAvatar.style.backgroundPosition = 'center';
+      // hide placeholder text if any
+      const t = profileAvatar.querySelector('.profile-avatar-text');
+      if (t) t.style.opacity = '0';
+    } else {
+      profileAvatar.style.backgroundImage = '';
+      const t = profileAvatar.querySelector('.profile-avatar-text');
+      if (t) t.style.opacity = '';
+    }
   }
 
   // body gate for CSS ("+ only when logged in")
@@ -923,12 +964,15 @@ function initAuth() {
     location.hash = '#home';
   });
 
-  // NEW: Account save (username)
+    // NEW: Account save (username + bio + pfp_url)
   const accountForm = accountView?.querySelector('form');
   const accSaveBtn =
     $('#accSaveBtn') ||
     accountView?.querySelector('[data-action="save-account"]') ||
     accountView?.querySelector('button[type="submit"]');
+
+  // local scratch for pfp url (set by pencil/remove)
+  let __pendingPfpUrl = null;
 
   const doAccountSave = async () => {
     if (!isUserLoggedIn()) {
@@ -937,31 +981,74 @@ function initAuth() {
       return;
     }
 
+    const cached = (__authUser || getCachedAuthUser()) || {};
+    const currentUsername = (cached.username || '').toString();
+    const currentBio = (cached.bio || '').toString();
+    const currentPfp = (cached.pfp_url ?? cached.pfpUrl ?? '').toString();
+
     const newUsername = String($('#accUsername')?.value || '').trim();
-    const current = (__authUser || getCachedAuthUser())?.username || '';
+    const newBio = String($('#accBio')?.value || '').trim();
+    const newPfpUrl = (__pendingPfpUrl !== null ? __pendingPfpUrl : currentPfp).toString().trim();
 
+    // validate username only if changed
     if (!newUsername) return showNotification?.('Username cannot be empty.');
-    if (newUsername === current) return showNotification?.('No changes to save.');
+    if (newUsername !== currentUsername) {
+      if (newUsername.length < 3 || newUsername.length > 24) return showNotification?.('Username must be 3–24 characters.');
+      if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) return showNotification?.('Username can only use letters, numbers, underscore.');
+    }
 
-    // same rules as API
-    if (newUsername.length < 3 || newUsername.length > 24) return showNotification?.('Username must be 3–24 characters.');
-    if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) return showNotification?.('Username can only use letters, numbers, underscore.');
+    // validate bio length (pick a safe limit; match your API if you set one)
+    if (newBio.length > 500) return showNotification?.('Bio is too long (max 500 chars).');
 
-    // disable button while saving
+    // validate pfp url lightly (optional)
+    if (newPfpUrl && !/^https?:\/\//i.test(newPfpUrl)) {
+      return showNotification?.('Profile picture URL must start with http:// or https://');
+    }
+
+    const changed =
+      newUsername !== currentUsername ||
+      newBio !== currentBio ||
+      newPfpUrl !== currentPfp;
+
+    if (!changed) return showNotification?.('No changes to save.');
+
     if (accSaveBtn) accSaveBtn.disabled = true;
 
     try {
-      const { res, j } = await authUpdateUsername(newUsername);
+      // Prefer one-shot endpoint
+      let res, j;
+
+      // If you didn’t add /auth/account yet, this will 404 and we’ll fallback to /auth/username.
+      ({ res, j } = await authUpdateAccount({ username: newUsername, bio: newBio, pfp_url: newPfpUrl || null }));
+
       if (!res.ok || !j?.ok) {
+        // fallback: at least update username if account route isn't there
+        if (res?.status === 404) {
+          const fallback = await authUpdateUsername(newUsername);
+          if (!fallback.res.ok || !fallback.j?.ok) {
+            showNotification?.(`Save failed: ${fallback.j?.error || 'save_failed'}`);
+            return;
+          }
+          // merge local fields if API didn’t support them
+          const merged = { ...(fallback.j.user || {}), bio: newBio, pfp_url: newPfpUrl || null };
+          setAuthUser(merged);
+          __pendingPfpUrl = null;
+          syncAccountFields();
+          syncAuthUI();
+          showNotification?.('Saved (username only; bio/pfp need /auth/account).');
+          return;
+        }
+
         showNotification?.(`Save failed: ${j?.error || 'save_failed'}`);
         return;
       }
 
-      // update local auth snapshot + UI
       if (j?.user) setAuthUser(j.user);
+      __pendingPfpUrl = null;
+
       syncAccountFields();
       syncAuthUI();
-      showNotification?.('Username updated.');
+      showNotification?.('Account updated.');
     } catch (e) {
       console.error(e);
       showNotification?.('Save failed (network/CORS).');
@@ -969,6 +1056,54 @@ function initAuth() {
       if (accSaveBtn) accSaveBtn.disabled = false;
     }
   };
+
+  accountForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    doAccountSave();
+  });
+
+  accSaveBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    doAccountSave();
+  });
+
+  // Identity extras (pencil => prompt for URL, remove => clear)
+  accountView?.addEventListener('click', (e) => {
+    const edit = e.target.closest('#accPfpEditBtn');
+    if (edit) {
+      e.preventDefault();
+
+      const cached = (__authUser || getCachedAuthUser()) || {};
+      const currentPfp = (cached.pfp_url ?? cached.pfpUrl ?? '').toString().trim();
+
+      const next = window.prompt('Paste an image URL for your profile picture:', currentPfp);
+      if (next === null) return; // cancelled
+
+      __pendingPfpUrl = String(next || '').trim();
+
+      // instant preview in Account UI
+      const previewUser = { ...cached, pfp_url: __pendingPfpUrl || null };
+      setAuthUser(previewUser);
+      syncAccountFields();
+      syncAuthUI();
+      return;
+    }
+
+    const remove = e.target.closest('#accPfpRemoveBtn');
+    if (remove) {
+      e.preventDefault();
+
+      __pendingPfpUrl = ''; // clear
+      const cached = (__authUser || getCachedAuthUser()) || {};
+      const previewUser = { ...cached, pfp_url: null };
+      setAuthUser(previewUser);
+      syncAccountFields();
+      syncAuthUI();
+      showNotification?.('Picture cleared (press Save changes to apply).');
+      return;
+    }
+  });
+
 
   // If your account page uses a form, submit saves username
   accountForm?.addEventListener('submit', (e) => {
