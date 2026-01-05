@@ -1504,7 +1504,7 @@ color: var(--text-secondary);
 @media (max-width: 900px){
   .home-section{ padding: 14px 14px 8px; }
   .home-section-head{ flex-wrap: wrap; }
-  .home-section-filters{ width: 100%; justify-content: space-between; }
+  .home-section-nav{ width: auto; justify-content: flex-end; }
   .home-row .anime-card{ flex-basis: 210px; height: 168px; } /* 210 * 4/5 = 168 */
   .home-skeleton{ flex-basis: 210px; height: 168px; }
   .home-row-nav{ display: none; }
@@ -1645,28 +1645,57 @@ justify-content: space-between;
   height: 46px;
   border-radius: 999px;
 
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0);
-  color: var(--text-primary);
+  /* KEY FIX: not transparent, so header highlight lines don't show through */
+  background: rgba(10,14,26,.70);
+  background-image: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  border: 1px solid rgba(255,255,255,.14);
 
   display: grid;
   place-items: center;
 
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 10px 30px rgba(0,0,0,.35);
+  /* KEY FIX: hard-clip anything inside */
+  overflow: hidden;
+
+  /* KEY FIX: remove inset (it was making the top "slash") */
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 
   cursor: pointer;
   transition: transform .15s ease, border-color .2s ease, background .2s ease;
+
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .profile-icon-btn:hover{
   border-color: rgba(124,58,237,.35);
+  background: rgba(10,14,26,.78);
+  background-image: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
 }
 
 .profile-icon-btn:active{
   transform: translateY(1px);
 }
+
+.profile-icon-btn:focus-visible{
+  box-shadow:
+    0 10px 30px rgba(0,0,0,.35),
+    0 0 0 3px rgba(124,58,237,.22);
+}
+
+
+/* Hide profile icon completely when no user */
+body.is-guest #navProfileBtn{
+  display: none !important;
+}
+
+
+#navProfileBtn:not(.has-pfp){
+  display: none !important;
+}
+
 
 /* Header PFP inside the user icon */
 .profile-icon-btn .header-pfp{
@@ -5300,38 +5329,100 @@ border: 1px solid rgba(167, 139, 250, .12);
 }
 
 
-.relations-list {
-  margin: 6px 0 0;
-  padding-left: 22px;
-  list-style: disc;
+/* Relations → 3-column grid (no scrolling) */
+.relations-list{
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
 
-  /* scroll like synopsis when long (≈ 5 items visible) */
-  max-height: 320px;
-  overflow: auto;
-  scrollbar-width: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
 
-  /* keeps text away from edge when scrolling */
-  padding-right: 10px;
+  /* IMPORTANT: kill scroll behavior */
+  max-height: none;
+  overflow: visible;
 }
 
-.relations-list::-webkit-scrollbar {
-  display: none;
+/* responsive */
+@media (max-width: 1100px){
+  .relations-list{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px){
+  .relations-list{ grid-template-columns: 1fr; }
 }
 
-.relations-list li {
-  margin: 10px 0;
-  font-weight: 400;
-  letter-spacing: .2px;
+.relations-list li{
+  margin: 0;
+  min-width: 0;
 }
 
-.relations-list a {
-  color: #efceff;
+.relations-list a{
+  display: block;
+  padding: 12px 12px;
+  border-radius: 16px;
+
+  /* “glass card” look */
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255,255,255,.12);
+ 
+  color: white;
   text-decoration: none;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.relations-list a:hover {
-  text-decoration: underline;
+.relations-list a:hover{
+  border-color: rgba(124,58,237,.35);
+ 
+  color: rgb(255, 198, 208);
 }
+
+
+/* Home section header: replace filter chips with scroll arrows */
+.home-section-nav{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.home-head-nav{
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(0,0,0,.22);
+  color: rgba(255,255,255,.92);
+
+  display: grid;
+  place-items: center;
+
+  cursor: pointer;
+
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  transition: transform .15s ease, background .15s ease, opacity .15s ease;
+}
+
+.home-head-nav:hover{
+  background: rgba(0,0,0,.35);
+  transform: scale(1.05);
+}
+
+.home-head-nav:disabled{
+  opacity: .25;
+  cursor: default;
+  transform: none;
+}
+
+
+
+
 
 /* ===================== LIST GRID — tight columns + 70% max title ===================== */
 
@@ -5863,7 +5954,6 @@ ease;
 .entrydetails-page .entrydetails-panels{
   margin-top: 54px;
   display: grid;
- 
   gap: 80px;
   align-items: start;
 }
@@ -5873,6 +5963,43 @@ ease;
     grid-template-columns: 1fr;
     gap: 24px;
   }
+}
+
+/* Information panel → 3-column grid */
+.entrydetails-page #entryDetailsInfoPanel .detail-info-grid{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 22px;
+}
+
+@media (max-width: 1100px){
+  .entrydetails-page #entryDetailsInfoPanel .detail-info-grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px){
+  .entrydetails-page #entryDetailsInfoPanel .detail-info-grid{
+    grid-template-columns: 1fr;
+  }
+}
+
+.entrydetails-page #entryDetailsInfoPanel .detail-info-item{
+  min-width: 0;
+}
+
+.entrydetails-page #entryDetailsInfoPanel .detail-label{
+  
+  opacity: .7;
+  margin-bottom: 6px;
+  white-space: nowrap;
+}
+
+.entrydetails-page #entryDetailsInfoPanel .detail-value{
+  
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .entrydetails-page .detail-top {

@@ -3054,20 +3054,40 @@ function __wireHomeRowShell(shell){
   if (!shell || shell.__rowNavWired) return;
   shell.__rowNavWired = true;
 
-  const row  = shell.querySelector('.home-row');
-  const prev = shell.querySelector('.home-row-nav.prev');
-  const next = shell.querySelector('.home-row-nav.next');
-  if (!row || !prev || !next) return;
+  const row = shell.querySelector('.home-row');
+  if (!row) return;
 
-  const step = () => Math.max(220, Math.floor(row.clientWidth * 0.85));
+  const section = shell.closest('section.home-section') || shell.closest('.home-section') || null;
 
-  prev.addEventListener('click', () => {
-    row.scrollBy({ left: -step(), behavior: 'smooth' });
-  });
+  // Header buttons (new)
+  const headPrev = section?.querySelector?.('.home-section-head .home-head-nav.prev') || null;
+  const headNext = section?.querySelector?.('.home-section-head .home-head-nav.next') || null;
 
-  next.addEventListener('click', () => {
-    row.scrollBy({ left: step(), behavior: 'smooth' });
-  });
+  // Shell buttons (old)
+  const shellPrev = shell.querySelector('.home-row-nav.prev') || null;
+  const shellNext = shell.querySelector('.home-row-nav.next') || null;
+
+  const step = () => Math.max(190, Math.floor(row.clientWidth * 0.6));
+
+  // Bind helper (dedupes listeners)
+  function bind(btn, dir){
+    if (!btn) return;
+
+    // remove old handler if re-wired
+    if (btn.__homeRowClick) btn.removeEventListener('click', btn.__homeRowClick);
+
+    btn.__homeRowClick = () => {
+      row.scrollBy({ left: dir * step(), behavior: 'smooth' });
+    };
+
+    btn.addEventListener('click', btn.__homeRowClick);
+  }
+
+  // IMPORTANT: bind BOTH sets if they exist
+  bind(shellPrev, -1);
+  bind(shellNext,  1);
+  bind(headPrev,  -1);
+  bind(headNext,   1);
 
   const update = () => {
     const max = Math.max(0, row.scrollWidth - row.clientWidth);
@@ -3075,14 +3095,15 @@ function __wireHomeRowShell(shell){
 
     shell.dataset.noOverflow = overflow ? '0' : '1';
 
-    if (!overflow) {
-      prev.disabled = true;
-      next.disabled = true;
-      return;
-    }
+    const leftDisabled  = !overflow || row.scrollLeft <= 2;
+    const rightDisabled = !overflow || row.scrollLeft >= (max - 2);
 
-    prev.disabled = row.scrollLeft <= 2;
-    next.disabled = row.scrollLeft >= (max - 2);
+    // update BOTH sets
+    if (shellPrev) shellPrev.disabled = leftDisabled;
+    if (headPrev)  headPrev.disabled  = leftDisabled;
+
+    if (shellNext) shellNext.disabled = rightDisabled;
+    if (headNext)  headNext.disabled  = rightDisabled;
   };
 
   shell.__rowNavUpdate = update;
@@ -3092,6 +3113,7 @@ function __wireHomeRowShell(shell){
 
   requestAnimationFrame(update);
 }
+
 
 function __initHomeRowNav(){
   document.querySelectorAll('.home-row-shell').forEach(__wireHomeRowShell);
