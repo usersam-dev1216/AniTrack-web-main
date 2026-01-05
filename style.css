@@ -586,7 +586,7 @@ body.route-browse .browse-layout{
   width: 100%;
   
   
-  padding: 22px 0px 46px;
+  padding: 22px 5px 46px;
 
   display: grid;
   grid-template-columns: 1fr 340px;
