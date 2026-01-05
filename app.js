@@ -7477,12 +7477,17 @@ function renderEntryDetailsPage(){
     renderEntryDetailsPage.__bound = true;
 
     // Back button (no modal close)
-document.getElementById('entryDetailsBackBtn')?.addEventListener('click', (e) => {
-  e.preventDefault();
+   document.getElementById('entryDetailsBackBtn')?.addEventListener('click', (e) => {
+   e.preventDefault();
 
-  const from = window.__entryDetailsFrom || 'home';
-  location.hash = (from === 'list') ? '#list' : '#home';
-});
+    const from = window.__entryDetailsFrom || 'home';
+    location.hash = (from === 'list') ? '#list' : '#home';
+    });
+
+    // Relations: always-visible scroll buttons
+        // Relations: grid mode now (no scrolling needed)
+    // Keep buttons in HTML if you want, but they do nothing.
+
 
     // Relations: open another entry in the same page
     entryDetailsView.addEventListener('click', (e) => {
@@ -7800,6 +7805,7 @@ try {
   setTextAny(['entryDetailsInfoAgeRating', 'detailInfoAgeRating'], mi.ageRating     || a.ageRating || a.rating);
 
   // --- Relations (support page + legacy modal IDs) ---
+    // --- Relations (support page + legacy modal IDs) ---
   const relPanel =
     document.getElementById('entryDetailsRelationsPanel') ||
     document.getElementById('detailRelationsPanel');
@@ -7812,27 +7818,65 @@ try {
     .map(x => String(x))
     .filter(x => x && x !== String(a.id));
 
+  // IMPORTANT: fix Set expansion (this was breaking the whole feature)
   const relIds = [...new Set(linked)];
 
   if (relPanel) relPanel.style.display = relIds.length ? '' : 'none';
 
   if (relList) {
+    // grid mode (no scrolling)
+    relList.classList.remove('entrydetails-rel-row');
+    relList.classList.add('entrydetails-rel-grid');
+
+    const relatedMap = window.__entryDetailsExtra?.relatedById || {};
+
     relList.innerHTML = relIds.map(rid => {
       const b = (typeof getAnimeById === 'function')
         ? getAnimeById(rid)
         : (animeList || []).find(x => String(x?.id) === String(rid));
 
-      const relatedMap = window.__entryDetailsExtra?.relatedById || {};
-const relTitle = relatedMap[String(rid)] || '';
-const name = esc(b?.title || relTitle || `#${rid}`);
+      const relTitle = relatedMap[String(rid)] || '';
+      const title = esc(b?.title || relTitle || `#${rid}`);
+
+      // keep subtitle lightweight (don’t invent new info)
+      const subRaw = b?.subtitle || b?.type || b?.media_type || '';
+      const sub = esc(String(subRaw || '').trim());
+
+      const img = b?.image ? String(b.image) : '';
       const hid = encodeURIComponent(rid);
-      // store RAW id in data-attr (no double-encode problems)
-      return `<li><a href="#entrydetails?id=${hid}" data-open-entrydetails="${esc(rid)}">${name}</a></li>`;
+
+      return `
+        <li>
+          <a
+            class="entrydetails-rel-card"
+            href="#entrydetails?id=${hid}"
+            data-open-entrydetails="${esc(rid)}"
+          >
+            <div class="entrydetails-rel-art">
+              ${
+                img
+                  ? `<img src="${esc(img)}" alt="${title}">`
+                  : `<div class="entrydetails-rel-fallback"><i class="fas fa-image"></i></div>`
+              }
+              <div class="entrydetails-rel-overlay">
+                <div class="entrydetails-rel-title">${title}</div>
+                ${sub ? `<div class="entrydetails-rel-sub">${sub}</div>` : ``}
+              </div>
+            </div>
+          </a>
+        </li>
+      `;
     }).join('');
   }
 
 
-}
+    enableRelationsHScroll(relList);
+  }
+
+
+
+
+
 
 
 /* ----------------------------- BROWSE (MAL Live Search) ---------------------------- */
