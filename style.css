@@ -227,7 +227,6 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
   letter-spacing: .2px;
 }
 
-/* "+" placeholder button (bottom-right) */
 #browseView .browse-entry-plus{
   position: absolute;
   right: 18px;
@@ -246,12 +245,34 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
 
   cursor: default; /* placeholder */
   box-shadow: 0 16px 40px rgba(0,0,0,.35);
+
+  /* --- hover-only visibility (no design changes) --- */
+  opacity: 0;
+  transition: opacity .15s ease;
+  pointer-events: auto; /* allow hover even when invisible */
+}
+
+/* invisible hover area around the button (bottom-right zone) */
+#browseView .browse-entry-plus::before{
+  content: "";
+  position: absolute;
+  inset: -31px;          /* makes a ~90x90 hover zone */
+  background: transparent;
+}
+
+/* show when hovering the bottom-right zone (the hitbox counts as hover) */
+#browseView .browse-entry-plus:hover,
+#browseView .browse-entry-plus:focus-visible{
+  opacity: 1;
 }
 
 #browseView .browse-entry-plus i{
   font-size: 15px;
   line-height: 1;
 }
+
+
+
 
 /* Optional: if empty-state looks like a box in your build, de-box it */
 #browseView .empty-state{
@@ -565,7 +586,7 @@ body.route-browse .browse-layout{
   width: 100%;
   
   
-  padding: 22px 16px 46px;
+  padding: 22px 0px 46px;
 
   display: grid;
   grid-template-columns: 1fr 340px;
@@ -3460,6 +3481,236 @@ padding-bottom: 3px;
   }
 }
 
+
+/* =========================
+   USER ENTRY MODAL (List Edit) — screenshot layout
+   ========================= */
+.user-entry-modal{
+  background: rgba(0,0,0,.55);
+}
+
+.user-entry-modal .ue-stage{
+  max-width: 1280px;
+  width: min(1280px, calc(100vw - 64px));
+  padding: 34px 34px 26px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .05);
+  position: relative;
+  overflow: hidden;
+}
+
+.user-entry-modal .ue-close{
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.04);
+  color: #fff;
+  cursor: pointer;
+}
+
+.user-entry-modal .ue-title{
+  margin: 6px 0 22px;
+  font-size: x-large;
+  font-weight: 900;
+  color: #ffbdf0;
+  letter-spacing: .2px;
+}
+
+.user-entry-modal .ue-layout{
+  display: grid;
+  grid-template-columns: 240px 500px 1fr;
+  gap: 36px;
+  align-items: start;
+}
+
+.user-entry-modal .ue-cover{
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255,255,255,.06);
+ 
+  aspect-ratio: 2 / 3; /* tall poster block like screenshot */
+}
+
+.user-entry-modal .ue-cover img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.user-entry-modal .ue-cover-fallback{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 800;
+  color: rgba(255,255,255,.85);
+  pointer-events: none;
+}
+
+.user-entry-modal .ue-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px 22px;
+}
+
+.user-entry-modal .ue-field label,
+.user-entry-modal .ue-notes-label{
+  display: block;
+  margin-bottom: 8px;
+  font-size: 1.05rem;
+  color: #fff;
+  letter-spacing: .15px;
+}
+
+.user-entry-modal .ue-control{
+  width: 100%;
+  height: 44px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,.15);
+  background: #0000007a;
+  color: white;
+  outline: none;
+}
+
+
+
+.user-entry-modal .ue-eps{
+  display: grid;
+  grid-template-columns: 65px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.user-entry-modal .ue-eps-total{
+  color: rgba(255,255,255,.9);
+  font-size: 1.25rem;
+  letter-spacing: .2px;
+}
+
+.user-entry-modal .ue-check{
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 44px;
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.user-entry-modal .ue-check input{
+  width: 22px;
+  height: 22px;
+  appearance: none;
+  border-radius: 44px;
+  border: 2px solid #ffbdf0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.user-entry-modal .ue-check input:checked{
+  background: #ffbdf0;
+  box-shadow: inset 0 0 0 4px rgba(6,6,18,.95);
+}
+
+.user-entry-modal .ue-notes{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.user-entry-modal .ue-notes-box{
+  min-height: 320px;
+  height: 100%;
+  resize: none;
+  padding: 14px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,.15);
+  background: #0000007a;
+  color: white;
+  outline: none;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.user-entry-modal .ue-actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.user-entry-modal .ue-btn{
+  height: 35px;
+  min-width: 80px;
+  padding: 0 18px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+
+.user-entry-modal .ue-btn--remove{
+  background: #8b0f24;
+  color: #fff;
+}
+
+.user-entry-modal .ue-btn--save{
+  background: #ffbdf0;
+  color: #231122;
+}
+
+.user-entry-modal .ue-hidden-field{
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.user-entry-modal .ue-guest-note{
+  margin-top: 14px;
+  color: rgba(255,255,255,.75);
+  font-size: .95rem;
+}
+
+@media (max-width: 1100px){
+  .user-entry-modal .ue-layout{
+    grid-template-columns: 320px 1fr;
+    grid-template-areas:
+      "cover notes"
+      "form  form";
+  }
+  .user-entry-modal .ue-cover{ grid-area: cover; }
+  .user-entry-modal .ue-notes{ grid-area: notes; }
+  .user-entry-modal .ue-form{ grid-area: form; }
+}
+
+@media (max-width: 720px){
+  .user-entry-modal .ue-layout{
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "cover"
+      "form"
+      "notes";
+  }
+  .user-entry-modal .ue-stage{
+    width: calc(100vw - 28px);
+    padding: 22px 18px 18px;
+  }
+  .user-entry-modal .ue-grid{
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ================ TOUCH INTERACTIONS ================ */
 

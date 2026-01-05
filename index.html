@@ -702,6 +702,104 @@
 
 
 
+    <!-- USER ENTRY MODAL (List Edit) -->
+    <div id="userEntryModal" class="modal user-entry-modal" aria-hidden="true">
+      <div class="modal-content ue-stage" role="dialog" aria-modal="true" aria-label="Edit Your Data">
+        <button class="close-modal ue-close" data-close="#userEntryModal" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+
+        <h2 class="ue-title">Edit Your Data</h2>
+
+        <div class="ue-layout">
+          <!-- LEFT: Picture -->
+          <div class="ue-cover">
+            <img id="userEntryCoverImg" alt="Cover" />
+            <div class="ue-cover-fallback"></div>
+          </div>
+
+          <!-- MIDDLE: Fields -->
+          <div class="ue-form">
+            <div class="ue-grid">
+              <div class="ue-field">
+                <label for="ueStatus">Status</label>
+                <select id="ueStatus" class="ue-control">
+                  <option value="">Select Status</option>
+                  <option value="Watching">Watching</option>
+                  <option value="Completed">Completed</option>
+                  <option value="On Hold">On Hold</option>
+                  <option value="Dropped">Dropped</option>
+                  <option value="Plan to Watch">Plan to Watch</option>
+                </select>
+              </div>
+
+              <div class="ue-field">
+                <label for="ueEpWatched">Eps Watched</label>
+                <div class="ue-eps">
+                  <input id="ueEpWatched" type="number" min="0" step="1" class="ue-control ue-control--num" value="0" />
+                  <div class="ue-eps-total">/ <span id="ueEpTotal">0</span></div>
+                </div>
+              </div>
+
+              <div class="ue-field">
+                <label for="ueStartDate">Started</label>
+                <input id="ueStartDate" type="date" class="ue-control" />
+              </div>
+
+              <div class="ue-field">
+                <label for="ueFinishDate">Finished</label>
+                <input id="ueFinishDate" type="date" class="ue-control" />
+              </div>
+
+              <div class="ue-field">
+                <label for="ueScore">Score</label>
+                <select id="ueScore" class="ue-control">
+                  <option value="0">Select Score</option>
+                  <option value="1">1 (Appalling)</option>
+                  <option value="2">2 (Horrible)</option>
+                  <option value="3">3 (Very Bad)</option>
+                  <option value="4">4 (Bad)</option>
+                  <option value="5">5 (Average)</option>
+                  <option value="6">6 (Fine)</option>
+                  <option value="7">7 (Good)</option>
+                  <option value="8">8 (Very Good)</option>
+                  <option value="9">9 (Great)</option>
+                  <option value="10">10 (Masterpiece)</option>
+                </select>
+              </div>
+
+              <div class="ue-field">
+                <label for="ueRewatches">Rewatch Count</label>
+                <input id="ueRewatches" type="number" min="0" step="1" class="ue-control ue-control--num" value="0" />
+              </div>
+            </div>
+
+            <label class="ue-check">
+              <input id="ueFavorite" type="checkbox" />
+              <span>Add to favorites</span>
+            </label>
+
+            <!-- Hidden but required by JS payload -->
+            <input id="ueCustomList" type="text" class="ue-hidden-field" tabindex="-1" aria-hidden="true" />
+
+            <!-- Guest hint (JS can toggle/show this) -->
+            <div id="ueGuestNote" class="ue-guest-note" hidden>you need to login or sign up</div>
+          </div>
+
+          <!-- RIGHT: Notes -->
+          <div class="ue-notes">
+            <label for="ueNotes" class="ue-notes-label">Notes</label>
+            <textarea id="ueNotes" class="ue-notes-box" placeholder=""></textarea>
+          </div>
+        </div>
+
+        <div class="ue-actions">
+          <button id="ueDeleteBtn" type="button" class="ue-btn ue-btn--remove">Remove</button>
+          <button id="ueSaveBtn" type="button" class="ue-btn ue-btn--save">Apply</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Import Modal -->
     <div id="importModal" class="modal">
         <div class="modal-content">

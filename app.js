@@ -580,27 +580,23 @@ async function openUserEntryModalFromMalId(malId){
   const modal = __getEl('userEntryModal');
   if (!modal) return;
 
-  // ✅ Guest mode support
-  const isGuest = !isUserLoggedIn();
-  modal.classList.toggle('is-guest', isGuest);
+  // UI-only mode (always editable for now)
+  modal.classList.remove('is-guest');
 
   const guestNote = __getEl('ueGuestNote');
-  if (guestNote) guestNote.hidden = !isGuest;
+  if (guestNote) guestNote.hidden = true;
 
   const setDisabled = (id, v) => {
     const el = __getEl(id);
     if (el) el.disabled = !!v;
   };
 
-  // disable all inputs in guest mode
+  // ensure everything is enabled
   [
     'ueStatus','ueScore','ueStartDate','ueFinishDate',
-    'ueNotes','ueFavorite','ueRewatches','ueCustomList','ueEpWatched'
-  ].forEach(id => setDisabled(id, isGuest));
-
-  // disable actions in guest mode
-  setDisabled('ueSaveBtn', isGuest);
-  setDisabled('ueDeleteBtn', isGuest);
+    'ueNotes','ueFavorite','ueRewatches','ueCustomList','ueEpWatched',
+    'ueSaveBtn','ueDeleteBtn'
+  ].forEach(id => setDisabled(id, false));
 
   // meta: try from current card image first
   const card = document.querySelector(`.anime-card[data-mal-id="${mid}"]`);
@@ -665,74 +661,60 @@ function closeUserEntryModal(){
 }
 
 async function saveUserEntryModal(){
-  if (!isUserLoggedIn()) {
-    showNotification?.('you need to login or sign up');
-    return;
-  }
   if (!__ueActiveMalId) return;
+
+  // UI-only drafts (no API calls)
+  window.__UE_DRAFTS = window.__UE_DRAFTS || new Map();
 
   const mid = __ueActiveMalId;
 
   const payload = {
     malId: mid,
-    status: __getEl('ueStatus').value || 'Watching',
-    personalRating: Number(__getEl('ueScore').value || 0) || 0,
-    startedWatching: __getEl('ueStartDate').value || null,
-    endedWatching: __getEl('ueFinishDate').value || null,
-    customNotes: __getEl('ueNotes').value || '',
-    isFavorite: !!__getEl('ueFavorite').checked,
-    totalRewatches: Number(__getEl('ueRewatches').value || 0) || 0,
-    customList: __getEl('ueCustomList').value || null,
-    episodeProgress: Number(__getEl('ueEpWatched').value || 0) || 0
+    status: __getEl('ueStatus')?.value || '',
+    personalRating: Number(__getEl('ueScore')?.value || 0) || 0,
+    startedWatching: __getEl('ueStartDate')?.value || '',
+    endedWatching: __getEl('ueFinishDate')?.value || '',
+    customNotes: __getEl('ueNotes')?.value || '',
+    isFavorite: !!__getEl('ueFavorite')?.checked,
+    totalRewatches: Number(__getEl('ueRewatches')?.value || 0) || 0,
+    customList: __getEl('ueCustomList')?.value || '',
+    episodeProgress: Number(__getEl('ueEpWatched')?.value || 0) || 0
   };
 
-  // clamp
+  // clamp (still useful for UI)
   if (payload.episodeProgress < 0) payload.episodeProgress = 0;
-  if (__ueActiveMeta.totalEpisodes > 0 && payload.episodeProgress > __ueActiveMeta.totalEpisodes) {
+  if (__ueActiveMeta?.totalEpisodes > 0 && payload.episodeProgress > __ueActiveMeta.totalEpisodes) {
     payload.episodeProgress = __ueActiveMeta.totalEpisodes;
   }
 
-  const res = await listFetch('/list/upsert', {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  });
-  const j = await __safeJson(res);
-  if (!res.ok || !j?.ok) {
-    showNotification?.(`Save failed: ${j?.error || res.status}`);
-    return;
-  }
+  window.__UE_DRAFTS.set(mid, payload);
 
-  // refresh cache + UI
-  await loadListFromCloudAndHydrate().catch(()=>{});
-  showNotification?.('Saved');
+  showNotification?.('Saved (UI-only, not synced)');
   closeUserEntryModal();
-  renderAnimeCards?.();
-  renderHomePage?.();
-  if (!browseView?.hidden) renderBrowseHome?.();
 }
 
 async function deleteUserEntryModal(){
-  if (!isUserLoggedIn()) {
-    showNotification?.('you need to login or sign up');
-    return;
-  }
   if (!__ueActiveMalId) return;
 
+  // UI-only drafts (no API calls)
+  window.__UE_DRAFTS = window.__UE_DRAFTS || new Map();
   const mid = __ueActiveMalId;
 
-  const res = await listFetch(`/list/${mid}`, { method: 'DELETE' });
-  const j = await __safeJson(res);
-  if (!res.ok || !j?.ok) {
-    showNotification?.(`Delete failed: ${j?.error || res.status}`);
-    return;
-  }
+  window.__UE_DRAFTS.delete(mid);
 
-  await loadListFromCloudAndHydrate().catch(()=>{});
-  showNotification?.('Deleted');
+  // clear fields visually (optional but nice)
+  __getEl('ueStatus').value = '';
+  __getEl('ueScore').value = '0';
+  __getEl('ueStartDate').value = '';
+  __getEl('ueFinishDate').value = '';
+  __getEl('ueNotes').value = '';
+  __getEl('ueFavorite').checked = false;
+  __getEl('ueRewatches').value = '0';
+  __getEl('ueCustomList').value = '';
+  __getEl('ueEpWatched').value = '0';
+
+  showNotification?.('Removed (UI-only, not synced)');
   closeUserEntryModal();
-  renderAnimeCards?.();
-  renderHomePage?.();
-  if (!browseView?.hidden) renderBrowseHome?.();
 }
 
 
@@ -6555,6 +6537,18 @@ document.body.addEventListener('click', (e) => {
   if (modal) closeWithAnimation(modal);
 });
 
+  // User Entry modal actions (List edit)
+  document.getElementById('ueSaveBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    saveUserEntryModal();
+  });
+
+  document.getElementById('ueDeleteBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!confirm('Remove this entry from your list?')) return;
+    deleteUserEntryModal();
+  });
+
   // Sidebar auth (guest vs user)
   syncAuthUI();
   window.addEventListener('storage', syncAuthUI);
@@ -7876,13 +7870,17 @@ shell.addEventListener('click', (e) => {
   const card = e.target.closest('.browse-anime-card');
   if (!card) return;
 
-  // "+" opens the tracking modal (Browse-only)
+   // "+" opens the User Entry modal (UI-only for now)
   if (e.target.closest('.browse-entry-plus')) {
     e.preventDefault();
     e.stopPropagation();
-    openBrowseTrackModalFromCard(card);
+
+    const malId = card.getAttribute('data-mal-id');
+    if (malId) openUserEntryModalFromMalId(malId);
+
     return;
   }
+
 
   // Normal click on a browse card opens EntryDetails
   const malId = card.getAttribute('data-mal-id');
@@ -8104,9 +8102,11 @@ function renderBrowseCardHTML(it){
         </div>
       </div>
 
-      <button class="browse-entry-plus" type="button" aria-label="Add (coming soon)" title="Add (coming soon)">
-        <i class="fas fa-plus"></i>
-      </button>
+      <div class="browse-entry-plus-wrap" aria-hidden="true">
+        <button class="browse-entry-plus" type="button" aria-label="Add (coming soon)" title="Add (coming soon)">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
     </div>
   `;
 }
