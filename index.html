@@ -411,24 +411,52 @@
               <div class="account-panel-line"></div>
             </div>
 
-            <div class="account-grid">
-              <div class="account-field">
-                <label class="account-label" for="accUsername">Username</label>
-                <input id="accUsername" class="account-input" type="text" placeholder="Your username">
+            <div class="account-identity">
+              <!-- Profile Picture (placeholder only) -->
+              <div class="account-pfp">
+                <div id="accPfpVisual" class="account-pfp-visual">
+                  <div class="account-pfp-placeholder">
+                    <div class="account-pfp-title">Profile picture</div>
+                    <div class="account-pfp-sub">No picture uploaded yet.</div>
+                  </div>
+
+                  <!-- pencil icon (future feature) -->
+                  <button id="accPfpEditBtn" class="account-pfp-edit" type="button" aria-label="Edit profile picture" title="Edit profile picture">
+                    <i class="fas fa-pen"></i>
+                  </button>
+                </div>
+
+                <button id="accPfpRemoveBtn" class="account-btn danger ghost account-pfp-remove" type="button">
+                  Remove picture
+                </button>
               </div>
 
-              <div class="account-field">
-                <label class="account-label" for="accEmail">Email</label>
-                <input id="accEmail" class="account-input" type="email" inputmode="email" placeholder="something@example.com">
+              <!-- Fields -->
+              <div class="account-identity-fields">
+                <div class="account-grid">
+                  <div class="account-field">
+                    <label class="account-label" for="accUsername">Username</label>
+                    <input id="accUsername" class="account-input" type="text" placeholder="Your username">
+                  </div>
+
+                  <div class="account-field">
+                    <label class="account-label" for="accEmail">Email</label>
+                    <input id="accEmail" class="account-input" type="email" inputmode="email" placeholder="something@example.com">
+                  </div>
+                </div>
+
+                <div class="account-field">
+                  <label class="account-label" for="accBio">Bio</label>
+                  <textarea id="accBio" class="account-textarea" placeholder="Bio (coming soon)" disabled></textarea>
+                </div>
+
+                <div class="account-actions">
+                  <button id="accSaveBtn" class="account-btn primary" type="button" data-action="save-account">
+                    Save changes
+                  </button>
+                </div>
               </div>
             </div>
-
-            <div class="account-actions">
-  <button id="accSaveBtn" class="account-btn primary" type="button" data-action="save-account">
-    Save changes
-  </button>
-</div>
-
           </section>
 
           <!-- SECURITY -->

@@ -351,11 +351,22 @@ function getCachedAuthUser() {
 
 function setCachedAuthUser(u) {
   if (!u) { localStorage.removeItem(AUTH_USER_KEY); return; }
+
+  // keep extra fields if present (future-proofing)
+  const bio = (u.bio == null) ? '' : String(u.bio);
+  const pfpUrl =
+    (u.pfpUrl != null) ? String(u.pfpUrl) :
+    (u.profilePicture != null) ? String(u.profilePicture) :
+    (u.pfp != null) ? String(u.pfp) :
+    '';
+
   localStorage.setItem(AUTH_USER_KEY, JSON.stringify({
     id: u.id || '',
     username: u.username || '',
     email: u.email || '',
-    emailVerified: !!u.emailVerified
+    emailVerified: !!u.emailVerified,
+    bio,
+    pfpUrl
   }));
 }
 
@@ -456,10 +467,39 @@ async function authUpdateUsername(username) {
 
 function syncAccountFields() {
   const u = __authUser || getCachedAuthUser();
+
   const un = $('#accUsername');
   const em = $('#accEmail');
+  const bio = $('#accBio');
+  const pfpVisual = $('#accPfpVisual');
+
   if (un) un.value = u?.username || '';
-  if (em) em.value = u?.email || '';
+
+  if (em) {
+    em.value = u?.email || '';
+    em.readOnly = true; // email is not editable
+  }
+
+  // Bio is not implemented yet (keep it disabled + placeholder)
+  if (bio) {
+    bio.value = u?.bio ? String(u.bio) : '';
+    bio.disabled = true;
+  }
+
+  // Profile picture placeholder only (no upload/remove logic yet)
+  if (pfpVisual) {
+    const url = u?.pfpUrl ? String(u.pfpUrl).trim() : '';
+    if (url) {
+      pfpVisual.innerHTML = `
+        <img src="${esc(url)}" alt="Profile picture" style="width:100%; height:100%; object-fit:cover;">
+        <button id="accPfpEditBtn" class="account-pfp-edit" type="button" aria-label="Edit profile picture" title="Edit profile picture">
+          <i class="fas fa-pen"></i>
+        </button>
+      `;
+    } else {
+      // keep the placeholder markup from HTML (do nothing)
+    }
+  }
 }
 
 async function listFetch(path, init = {}) {
@@ -940,6 +980,25 @@ function initAuth() {
   accSaveBtn?.addEventListener('click', (e) => {
     e.preventDefault();
     doAccountSave();
+  });
+
+  // Identity extras (Bio / Profile Picture placeholders)
+  $('#accBio') && ($('#accBio').disabled = true);
+
+  accountView?.addEventListener('click', (e) => {
+    const edit = e.target.closest('#accPfpEditBtn');
+    if (edit) {
+      e.preventDefault();
+      showNotification?.('Profile picture editing is coming soon.');
+      return;
+    }
+
+    const remove = e.target.closest('#accPfpRemoveBtn');
+    if (remove) {
+      e.preventDefault();
+      showNotification?.('Remove picture will be available after profile pictures are implemented.');
+      return;
+    }
   });
 
   // SIGNUP
