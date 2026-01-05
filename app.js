@@ -894,9 +894,22 @@ function syncAuthUI() {
     headerProfileLink1.setAttribute('href', logged ? '#profile' : '#userlogin');
   }
 
-  if (headerProfileLink2) {
-    headerProfileLink2.textContent = logged ? 'Account' : 'Sign up';
-    headerProfileLink2.setAttribute('href', logged ? '#account' : '#usersignup');
+  // ----- Header user icon picture -----
+  if (navProfileBtn) {
+    const img = document.getElementById('headerPfpImg');
+    const url = logged ? String(u?.pfp_url ?? u?.pfpUrl ?? '').trim() : '';
+
+    if (img && url) {
+      img.hidden = false;
+      img.src = url;
+      navProfileBtn.classList.add('has-pfp');
+    } else {
+      if (img) {
+        img.hidden = true;
+        img.removeAttribute('src');
+      }
+      navProfileBtn.classList.remove('has-pfp');
+    }
   }
 
   // ----- Profile placeholders / user data -----
