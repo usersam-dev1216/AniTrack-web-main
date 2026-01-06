@@ -9462,7 +9462,17 @@ function applyRoute(){
       console.warn('List cloud load failed:', e);
       // fallback: keep local list
     }
-    renderAnimeCards(); // respects card/list mode
+
+    // ✅ LOCK: always list mode
+    UI.viewMode = 'list';
+    syncViewModeBtn?.();
+    syncListSidebarViewBtn?.();
+
+    // 1) render immediately (you'll at least see the rows)
+    renderAnimeCards();
+
+    // 2) then enrich the skeletons with MAL data so fields populate (type/season/genres/etc.)
+    runMALSyncSweep?.('MAL sync (after cloud hydrate)').catch(console.error);
   })();
 } else if (isBrowse) {
 
