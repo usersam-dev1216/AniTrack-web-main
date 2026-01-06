@@ -589,21 +589,90 @@ async function __hydrateEntryFromCachedPayload(entry) {
   const malId = Number(entry?.malId);
   if (!malId) return false;
 
-  // getFullPayloadCached is already used elsewhere in your code (modal meta fetch),
-  // so we reuse it to avoid hitting MAL directly.
   const payload = await getFullPayloadCached(malId);
-  const details = payload?.details || payload?.item || payload?.data || payload || null;
-  if (!details) return false;
+  const mal = payload?.details || null;   // MAL v2
+  const jikan = payload?.jikan || null;   // Jikan v4
+  if (!mal && !jikan) return false;
 
-  // Fill title/type/season/episodes/duration/genres/themes/malScore/etc.
-  applyMALDiff(entry, details);
+  // --- Build a "merged" item in the shape applyMALDiff expects ---
+  const merged = {};
+
+  // ID anchors (applyMALDiff reads mal_id / id / node.id)
+  merged.id = mal?.id ?? jikan?.mal_id ?? malId;
+  merged.mal_id = jikan?.mal_id ?? mal?.id ?? malId;
+
+  // Titles
+  merged.title =
+    mal?.title ||
+    jikan?.title ||
+    '';
+
+  merged.title_english =
+    mal?.alternative_titles?.en ||
+    jikan?.title_english ||
+    '';
+
+  merged.title_japanese =
+    jikan?.title_japanese ||
+    mal?.alternative_titles?.ja ||
+    '';
+
+  // Type / format
+  merged.media_type = mal?.media_type || '';
+  merged.type = jikan?.type || '';
+
+  // Premiered (applyMALDiff expects season+year)
+  merged.season =
+    mal?.start_season?.season ||
+    jikan?.season ||
+    '';
+
+  merged.year =
+    mal?.start_season?.year ||
+    jikan?.year ||
+    '';
+
+  // Episodes
+  merged.num_episodes = mal?.num_episodes ?? null;
+  merged.episodes = jikan?.episodes ?? null;
+
+  // Duration (applyMALDiff expects a string, but MAL gives seconds)
+  if (jikan?.duration) {
+    merged.duration = jikan.duration; // e.g. "24 min per ep"
+  } else {
+    const sec = Number(mal?.average_episode_duration);
+    if (Number.isFinite(sec) && sec > 0) {
+      const mins = Math.round(sec / 60);
+      merged.duration = mins > 0 ? `${mins} min per ep` : '';
+    } else {
+      merged.duration = '';
+    }
+  }
+
+  // MAL score (applyMALDiff expects mean_score/score)
+  merged.mean_score =
+    mal?.mean ??
+    jikan?.score ??
+    null;
+
+  // Genres + Themes (Themes mainly come from Jikan)
+  merged.genres = jikan?.genres || mal?.genres || [];
+  merged.themes = jikan?.themes || [];
+
+  // Airing status
+  merged.status = mal?.status || jikan?.status || '';
+
+  // Image: your list uses entry.image, but applyMALDiff also tries Jikan "images"
+  // We'll set entry.image directly from MAL main_picture after applyMALDiff.
+  // (applyMALDiff's own image logic targets Jikan fields)
+  applyMALDiff(entry, merged);
 
   // Ensure image is set for List view
   const img =
-    details?.main_picture?.large ||
-    details?.main_picture?.medium ||
-    details?.node?.main_picture?.large ||
-    details?.node?.main_picture?.medium ||
+    mal?.main_picture?.large ||
+    mal?.main_picture?.medium ||
+    jikan?.images?.jpg?.large_image_url ||
+    jikan?.images?.jpg?.image_url ||
     '';
 
   if (img) entry.image = img;
