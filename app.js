@@ -556,25 +556,165 @@ function __statusApiToUi(v) {
    ========================= */
 const CloudListByMalId = new Map();
 
-/* Patch loadListFromCloudAndHydrate: cache full fields too */
-const __origLoadListFromCloudAndHydrate = loadListFromCloudAndHydrate;
-loadListFromCloudAndHydrate = async function () {
-  await __origLoadListFromCloudAndHydrate();
+/* ------------------------------
+   Cloud List -> Local Hydration
+   ------------------------------ */
 
-  // Re-fetch once to get full rows (status + user fields)
-  if (!isUserLoggedIn()) return;
+function __applyUserFieldsFromCloudRow(entry, row) {
+  if (!entry || !row) return;
+
+  // Status always comes from D1 list row
+  const st = __statusApiToUi(row?.status) || '';
+  if (st) entry.status = st;
+
+  // Favorite (used by filters)
+  entry.isFavorite = !!row?.is_favorite;
+
+  // Personal rating -> store into first season rating so your list "Rating" column works
+  const pr = Number(row?.personal_rating ?? 0) || 0;
+  if (!Array.isArray(entry.seasons) || !entry.seasons.length) entry.seasons = [{}];
+  if (pr > 0) entry.seasons[0].rating = pr;
+
+  // Optional: keep these around for later UI use
+  entry.userMeta = entry.userMeta || {};
+  entry.userMeta.episodeProgress = Number(row?.episode_progress ?? 0) || 0;
+  entry.userMeta.rewatches = Number(row?.total_rewatches ?? 0) || 0;
+  entry.userMeta.customList = (row?.custom_list ?? '') || '';
+  entry.userMeta.notes = (row?.custom_notes ?? '') || '';
+  entry.userMeta.startedWatching = (row?.started_watching ?? '') || '';
+  entry.userMeta.endedWatching = (row?.ended_watching ?? '') || '';
+}
+
+async function __hydrateEntryFromCachedPayload(entry) {
+  const malId = Number(entry?.malId);
+  if (!malId) return false;
+
+  // getFullPayloadCached is already used elsewhere in your code (modal meta fetch),
+  // so we reuse it to avoid hitting MAL directly.
+  const payload = await getFullPayloadCached(malId);
+  const details = payload?.details || payload?.item || payload?.data || payload || null;
+  if (!details) return false;
+
+  // Fill title/type/season/episodes/duration/genres/themes/malScore/etc.
+  applyMALDiff(entry, details);
+
+  // Ensure image is set for List view
+  const img =
+    details?.main_picture?.large ||
+    details?.main_picture?.medium ||
+    details?.node?.main_picture?.large ||
+    details?.node?.main_picture?.medium ||
+    '';
+
+  if (img) entry.image = img;
+
+  return true;
+}
+
+async function loadListFromCloudAndHydrate() {
+  if (!isUserLoggedIn?.()) return;
+
   const res = await listFetch('/list', { method: 'GET' });
   const j = await __safeJson(res);
-  if (!res.ok || !j?.ok) return;
+
+  if (!res.ok || !j?.ok) {
+    throw new Error(j?.error || `list_fetch_failed_${res.status}`);
+  }
 
   const items = Array.isArray(j.items) ? j.items : [];
+
+  // Cache list rows for modal prefill
   CloudListByMalId.clear();
   for (const it of items) {
-    const malId = Number(it?.mal_id);
-    if (!malId) continue;
-    CloudListByMalId.set(malId, it);
+    const mid = Number(it?.mal_id);
+    if (Number.isFinite(mid) && mid > 0) CloudListByMalId.set(mid, it);
   }
-};
+
+  // Keep any existing enriched entries by id
+  if (!Array.isArray(window.animeList)) window.animeList = [];
+  const keep = new Map((animeList || []).map(a => [String(a?.id), a]));
+
+  const next = [];
+  for (const it of items) {
+    const malId = Number(it?.mal_id);
+    if (!Number.isFinite(malId) || malId <= 0) continue;
+
+    const key = `mal:${malId}`;
+    const existing = keep.get(key) || {
+      id: key,
+      malId,
+      title: `MAL #${malId}`,
+      subtitle: '',
+      image: '',
+      status: 'Plan to Watch',
+      relations: [],
+      isFavorite: false,
+      seasons: []
+    };
+
+    existing.id = key;
+    existing.malId = malId;
+
+    // Apply user fields from D1 row immediately (so filters work instantly)
+    __applyUserFieldsFromCloudRow(existing, it);
+
+    next.push(existing);
+  }
+
+  // Keep any non-mal:* items (safety)
+  for (const a of (animeList || [])) {
+    const id = String(a?.id || '');
+    if (id && !id.startsWith('mal:')) next.push(a);
+  }
+
+  animeList = next;
+
+  // ---- HYDRATE DETAILS (title/pictures/genres/etc) ----
+  // Concurrency limit so you don't spam the worker on big lists
+  const queue = (animeList || []).filter(a => String(a?.id || '').startsWith('mal:'));
+  const CONCURRENCY = 4;
+
+  let anyChanged = false;
+  let i = 0;
+
+  const workers = Array.from({ length: CONCURRENCY }, async () => {
+    while (i < queue.length) {
+      const idx = i++;
+      const entry = queue[idx];
+      try {
+        // Only hydrate if missing the real data
+        const looksEmpty =
+          !entry?.image ||
+          !entry?.genres ||
+          !entry?.themes ||
+          !entry?.malScore ||
+          /^MAL\s+#\d+$/i.test(String(entry?.title || ''));
+
+        if (!looksEmpty) continue;
+
+        const ok = await __hydrateEntryFromCachedPayload(entry);
+        if (ok) {
+          // Re-apply user fields (ensures personal rating/favorite persists)
+          const row = CloudListByMalId.get(Number(entry.malId)) || null;
+          __applyUserFieldsFromCloudRow(entry, row);
+
+          anyChanged = true;
+        }
+      } catch (e) {
+        console.warn('hydrate failed for', entry?.malId, e);
+      }
+    }
+  });
+
+  await Promise.all(workers);
+
+  // Re-render once after hydration completes
+  if (anyChanged) {
+    renderAnimeCards();
+  }
+}
+
+
 
 /* =========================
    User Entry Modal (open / prefill / save / delete)
@@ -2706,66 +2846,6 @@ function __statusApiToUi(v) {
   if (s === 'PLANNING') return 'Plan to Watch';
   return s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
-
-
-async function loadListFromCloudAndHydrate() {
-  if (!isUserLoggedIn?.()) return;
-
-  const res = await listFetch('/list', { method: 'GET' });
-  const j = await __safeJson(res);
-
-  if (!res.ok || !j?.ok) {
-    throw new Error(j?.error || `list_fetch_failed_${res.status}`);
-  }
-
-  const items = Array.isArray(j.items) ? j.items : [];
-
-  // Fill cache for modal prefill
-  CloudListByMalId.clear();
-  for (const it of items) {
-    const mid = Number(it?.mal_id);
-    if (Number.isFinite(mid) && mid > 0) CloudListByMalId.set(mid, it);
-  }
-
-  // Build next list while preserving any already-enriched MAL entries you may already have
-  if (!Array.isArray(window.animeList)) window.animeList = [];
-  const keep = new Map(animeList.map(a => [String(a?.id), a]));
-
-  const next = [];
-  for (const it of items) {
-    const malId = Number(it?.mal_id);
-    if (!Number.isFinite(malId) || malId <= 0) continue;
-
-    const key = `mal:${malId}`;
-    const existing = keep.get(key);
-
-    if (existing) {
-      existing.malId = malId;
-      existing.status = __statusApiToUi(it?.status) || existing.status || 'Plan to Watch';
-      next.push(existing);
-    } else {
-      next.push({
-        id: key,
-        malId,
-        title: `MAL #${malId}`,
-        subtitle: '',
-        image: '',
-        status: __statusApiToUi(it?.status) || 'Plan to Watch',
-        relations: [],
-        isFavorite: false
-      });
-    }
-  }
-
-  // Keep any non-mal:* items (safety)
-  for (const a of animeList) {
-    const id = String(a?.id || '');
-    if (id && !id.startsWith('mal:')) next.push(a);
-  }
-
-  animeList = next;
-}
-
 
 
 
