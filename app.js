@@ -330,54 +330,24 @@ function __safeJson(res) {
 const AUTH_API_BASE = 'https://anitrack-user-auth-list.usersam1216.workers.dev';
 const LIST_API_BASE = 'https://anitrack-user-auth-list.usersam1216.workers.dev';
 
-// Optional UI cache (can remove later if you truly want zero localStorage usage)
-const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot';
-
-// NOTE: Old JWT list-token flow removed. Everything uses credentials: "include".
-
+// localStorage removed completely
+const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot'; // kept only to avoid ref errors elsewhere
 
 function getCachedAuthUser() {
-  try {
-    const raw = localStorage.getItem(AUTH_USER_KEY);
-    if (!raw) return null;
-    const u = JSON.parse(raw);
-    if (!u || typeof u !== 'object') return null;
-    if (!u.username && !u.email) return null;
-    return u;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function setCachedAuthUser(u) {
-  if (!u) { localStorage.removeItem(AUTH_USER_KEY); return; }
-
-  // keep extra fields if present (future-proofing)
-  const bio = (u.bio == null) ? '' : String(u.bio);
-  const pfpUrl =
-    (u.pfpUrl != null) ? String(u.pfpUrl) :
-    (u.profilePicture != null) ? String(u.profilePicture) :
-    (u.pfp != null) ? String(u.pfp) :
-    '';
-
-  localStorage.setItem(AUTH_USER_KEY, JSON.stringify({
-    id: u.id || '',
-    username: u.username || '',
-    email: u.email || '',
-    emailVerified: !!u.emailVerified,
-    bio,
-    pfpUrl
-  }));
+  // no-op (no localStorage)
 }
 
 function setAuthUser(u) {
   __authUser = u || null;
-  setCachedAuthUser(__authUser);
   syncAuthUI();
 }
 
 function isUserLoggedIn() {
-  return !!(__authUser || getCachedAuthUser());
+  return !!__authUser;
 }
 
 // (removed) quick add button feature (modal postponed)
@@ -735,58 +705,97 @@ function closeUserEntryModal(){
 async function saveUserEntryModal(){
   if (!__ueActiveMalId) return;
 
-  // UI-only drafts (no API calls)
-  window.__UE_DRAFTS = window.__UE_DRAFTS || new Map();
+  // must be logged in to save to D1
+  if (!isUserLoggedIn()) {
+    showNotification?.('Login required to save.');
+    const note = __getEl('ueGuestNote');
+    if (note) note.hidden = false;
+    return;
+  }
 
-  const mid = __ueActiveMalId;
+  const mid = Number(__ueActiveMalId);
+  if (!Number.isFinite(mid) || mid <= 0) return;
 
   const payload = {
     malId: mid,
     status: __getEl('ueStatus')?.value || '',
-    personalRating: Number(__getEl('ueScore')?.value || 0) || 0,
-    startedWatching: __getEl('ueStartDate')?.value || '',
-    endedWatching: __getEl('ueFinishDate')?.value || '',
-    customNotes: __getEl('ueNotes')?.value || '',
+    personalRating: (() => {
+      const v = String(__getEl('ueScore')?.value || '0');
+      const n = Number(v);
+      return (!Number.isFinite(n) || n <= 0) ? null : n; // 0 => null
+    })(),
+    startedWatching: (__getEl('ueStartDate')?.value || '').trim() || null,
+    endedWatching: (__getEl('ueFinishDate')?.value || '').trim() || null,
+    customNotes: (__getEl('ueNotes')?.value || '').trim() || null,
     isFavorite: !!__getEl('ueFavorite')?.checked,
     totalRewatches: Number(__getEl('ueRewatches')?.value || 0) || 0,
-    customList: __getEl('ueCustomList')?.value || '',
+    customList: (__getEl('ueCustomList')?.value || '').trim() || null,
     episodeProgress: Number(__getEl('ueEpWatched')?.value || 0) || 0
   };
 
-  // clamp (still useful for UI)
+  // clamp
   if (payload.episodeProgress < 0) payload.episodeProgress = 0;
   if (__ueActiveMeta?.totalEpisodes > 0 && payload.episodeProgress > __ueActiveMeta.totalEpisodes) {
     payload.episodeProgress = __ueActiveMeta.totalEpisodes;
   }
 
-  window.__UE_DRAFTS.set(mid, payload);
+  try {
+    // ✅ REAL SAVE to D1
+    const res = await listFetch('/list/upsert', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const j = await __safeJson(res);
+    if (!res.ok || !j?.ok) throw new Error(j?.error || `save_failed_${res.status}`);
 
-  showNotification?.('Saved (UI-only, not synced)');
-  closeUserEntryModal();
+    // update cache so modal reopens filled
+    if (j?.item) CloudListByMalId.set(mid, { ...j.item, mal_id: mid });
+
+    showNotification?.('Saved to cloud');
+    closeUserEntryModal();
+
+    // refresh list page if needed
+    try { await loadListFromCloudAndHydrate(); } catch {}
+    try { renderAnimeCards?.(); } catch {}
+    try { renderHomePage?.(); } catch {}
+  } catch (e) {
+    console.error('saveUserEntryModal failed:', e);
+    showNotification?.('Save failed');
+  }
 }
+
+
 
 async function deleteUserEntryModal(){
   if (!__ueActiveMalId) return;
 
-  // UI-only drafts (no API calls)
-  window.__UE_DRAFTS = window.__UE_DRAFTS || new Map();
-  const mid = __ueActiveMalId;
+  if (!isUserLoggedIn()) {
+    showNotification?.('Login required to remove.');
+    return;
+  }
 
-  window.__UE_DRAFTS.delete(mid);
+  const mid = Number(__ueActiveMalId);
+  if (!Number.isFinite(mid) || mid <= 0) return;
 
-  // clear fields visually (optional but nice)
-  __getEl('ueStatus').value = '';
-  __getEl('ueScore').value = '0';
-  __getEl('ueStartDate').value = '';
-  __getEl('ueFinishDate').value = '';
-  __getEl('ueNotes').value = '';
-  __getEl('ueFavorite').checked = false;
-  __getEl('ueRewatches').value = '0';
-  __getEl('ueCustomList').value = '';
-  __getEl('ueEpWatched').value = '0';
+  try {
+    // ✅ REAL DELETE from D1
+    const res = await listFetch(`/list/${mid}`, { method: 'DELETE' });
+    const j = await __safeJson(res);
+    if (!res.ok || !j?.ok) throw new Error(j?.error || `delete_failed_${res.status}`);
 
-  showNotification?.('Removed (UI-only, not synced)');
-  closeUserEntryModal();
+    CloudListByMalId.delete(mid);
+
+    showNotification?.('Removed from cloud');
+    closeUserEntryModal();
+
+    // refresh list
+    try { await loadListFromCloudAndHydrate(); } catch {}
+    try { renderAnimeCards?.(); } catch {}
+    try { renderHomePage?.(); } catch {}
+  } catch (e) {
+    console.error('deleteUserEntryModal failed:', e);
+    showNotification?.('Remove failed');
+  }
 }
 
 
@@ -2531,10 +2540,7 @@ function repairLinkRelations() {
 }
 
 function loadFromLocalStorage() {
-  // ✅ HARD RULE: NOTHING uses localStorage anymore.
-  // Cloud (D1) is the only persistence.
-
-  // keep your defaults
+  // localStorage removed completely
   trackingStartDate = trackingStartDate || new Date('2023-01-01');
   trackingEndDate   = trackingEndDate   || new Date();
 
@@ -2543,15 +2549,16 @@ function loadFromLocalStorage() {
   UserAnimeList = [];
   animeList = animeList || [];
 
-  // keep repair steps safe
   normalizeIds?.();
   repairLinkRelations?.();
 }
 
 function saveToLocalStorage() {
-  // ✅ HARD RULE: NOTHING gets stored on localStorage.
-  // Intentionally no-op.
+  // localStorage removed completely (intentional no-op)
+  // keep cloud sync if you rely on it elsewhere:
+  try { syncListToCloudDebounced?.(); } catch (_) {}
 }
+
 
 // -------------------- Cloud status mapping (UI <-> Worker) --------------------
 function __uiStatusToCloud(ui) {
@@ -2734,66 +2741,60 @@ function syncListToCloudDebounced() {
 
 
 
-
-
-
 // Called when user opens #list
 async function loadListFromCloudAndHydrate() {
-  // Not logged in? leave current UI alone.
-  if (!isUserLoggedIn?.()) return;
+  if (!isUserLoggedIn()) return;
 
-  let data = null;
   try {
     const res = await listFetch('/list', { method: 'GET' });
-    data = await res.json().catch(() => null);
-    if (!res.ok || !data?.ok) throw new Error('list_fetch_failed');
+    const j = await __safeJson(res);
+    if (!res.ok || !j?.ok) throw new Error(j?.error || `list_fetch_failed_${res.status}`);
+
+    const items = Array.isArray(j.items) ? j.items : [];
+
+    // cache full rows for modal prefill
+    CloudListByMalId.clear();
+    for (const it of items) {
+      const mid = Number(it?.mal_id);
+      if (!Number.isFinite(mid) || mid <= 0) continue;
+      CloudListByMalId.set(mid, it);
+    }
+
+    // ensure local list contains these malIds (placeholders are fine)
+    const localMal = new Set((animeList || []).map(__getMalIdFromEntry).filter(Boolean));
+    const missing = items
+      .map(it => Number(it?.mal_id))
+      .filter(mid => Number.isFinite(mid) && mid > 0 && !localMal.has(mid));
+
+    for (const malId of missing) {
+      (animeList || (animeList = [])).push({
+        id: `mal:${malId}`,
+        title: `MAL #${malId}`,
+        subtitle: '',
+        image: '',
+        seasons: [],
+        malId: Number(malId),
+        // keep status compatible with your UI filter strings
+        status: (CloudListByMalId.get(Number(malId))?.status) || 'Plan to Watch'
+      });
+    }
+
+    // update status for existing items too
+    for (const a of (animeList || [])) {
+      const mid = __getMalIdFromEntry(a);
+      if (!mid) continue;
+      const row = CloudListByMalId.get(mid);
+      if (row?.status) a.status = row.status;
+    }
+
+    renderAnimeCards?.();
   } catch (e) {
-    console.error('Cloud list load failed:', e);
-    return;
+    console.warn('loadListFromCloudAndHydrate failed:', e);
   }
-
-  const items = Array.isArray(data.items) ? data.items : [];
-
-  // Keep a fast map for status filtering + modal prefill
-  __cloudListByMalId = new Map();
-  for (const it of items) __cloudListByMalId.set(String(it.mal_id), it);
-
-  // Build animeList entries if missing (use your existing skeleton + Jikan hydrate pipeline)
-  // IMPORTANT: this keeps your list-grid UI exactly the same.
-  const wanted = items.map(it => ({
-    malId: String(it.mal_id),
-    uiStatus: __cloudStatusToUI(it.status)
-  }));
-
-  // ensure animeList exists
-  animeList = Array.isArray(animeList) ? animeList : [];
-
-  // add skeletons for anything not present
-  for (const w of wanted) {
-    if (!entryExistsByMalId?.(w.malId)) {
-      const entry = makeSkeletonEntry({ malId: w.malId, statusLabel: w.uiStatus });
-      animeList.unshift(entry);
-    }
-  }
-
-  // hydrate (you already have this function in your app)
-  // If this doesn’t exist in your build, tell me the name you use for MAL-by-id fetch.
-  for (const w of wanted) {
-    const entry = (animeList || []).find(a => String(a.malId) === String(w.malId));
-    if (!entry) continue;
-    entry.status = w.uiStatus;
-
-    try {
-      const item = await jikanFetchFullById(w.malId);
-      if (item) applyMALDiff(entry, item);
-    } catch (e) {
-      console.warn('Hydrate failed for', w.malId, e);
-    }
-  }
-
-  renderAnimeCards?.();
-  refreshSidebarInfo?.();
 }
+
+
+
 
 
 
@@ -7492,18 +7493,14 @@ const UI_DEFAULTS = {
     rating: true
   }
 };
-let UI = (() => {
-  // ✅ No localStorage. Keep UI settings in-memory only.
-  const saved = {};
-  return {
-    ...UI_DEFAULTS,
-    ...saved,
-    listColumns: { ...UI_DEFAULTS.listColumns, ...(saved.listColumns || {}) }
-  };
-})();
+
+// localStorage removed completely — defaults only (in-memory)
+let UI = { ...UI_DEFAULTS, listColumns: { ...UI_DEFAULTS.listColumns } };
+
 function saveUI(){
-  // ✅ No localStorage. Intentionally no-op.
+  // no-op (no localStorage)
 }
+
 
 
 function syncViewModeBtn(){
@@ -8005,24 +8002,22 @@ let __browseAbort = null;
 //  - clicked/opened from browse
 // So search feels instant, and we avoid duplicates by mal_id.
 
-const LS_BROWSE_META_KEY = 'AniTrack_BrowseMetaDB_v1';
+const LS_BROWSE_META_KEY = 'AniTrack_BrowseMetaDB_v1'; // kept for compatibility
 
-// ✅ in-memory browse cache only (no persistence)
-let __BROWSE_META_DB_MEM = { v: 1, updatedAt: 0, entries: {} };
+// localStorage removed completely — in-memory only
+let __browseMetaDB = { v: 1, updatedAt: 0, entries: {} };
 
 function loadBrowseMetaDB() {
-  return __BROWSE_META_DB_MEM;
+  return __browseMetaDB;
 }
 
 function saveBrowseMetaDB(db) {
   try {
     db.updatedAt = Date.now();
-    __BROWSE_META_DB_MEM = db;
+    __browseMetaDB = db;
   } catch {}
 }
 
-
-let __browseMetaDB = loadBrowseMetaDB();
 
 function norm(s) {
   return String(s || '').trim().toLowerCase();
