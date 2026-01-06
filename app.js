@@ -1990,17 +1990,17 @@ if (section === 'import') {
 
 // --- MAL Import (via MAL XML.GZ export) — resumable + progress ---
 // Stores progress so the import can resume after refresh/crash
-const MAL_IMPORT_STATE_KEY = 'aniTrack.malImportState';
+// ✅ in-memory only (no persistence)
+let __MAL_IMPORT_STATE_MEM = null;
 
 function loadMALImportState() {
-  try { return JSON.parse(localStorage.getItem(MAL_IMPORT_STATE_KEY) || 'null'); }
-  catch { return null; }
+  return __MAL_IMPORT_STATE_MEM;
 }
 function saveMALImportState(state) {
-  try { localStorage.setItem(MAL_IMPORT_STATE_KEY, JSON.stringify(state)); } catch {}
+  __MAL_IMPORT_STATE_MEM = state || null;
 }
 function clearMALImportState() {
-  try { localStorage.removeItem(MAL_IMPORT_STATE_KEY); } catch {}
+  __MAL_IMPORT_STATE_MEM = null;
 }
 
 // Map MAL export my_status (numbers) to your UI labels
@@ -2531,37 +2531,142 @@ function repairLinkRelations() {
 }
 
 function loadFromLocalStorage() {
-  // Only keep small UI-only values locally (tracking dates).
-  try {
-    const s = localStorage.getItem('trackingStartDate');
-    const e = localStorage.getItem('trackingEndDate');
-    if (s) trackingStartDate = new Date(s);
-    if (e) trackingEndDate = new Date(e);
-  } catch {}
+  // ✅ HARD RULE: NOTHING uses localStorage anymore.
+  // Cloud (D1) is the only persistence.
 
-  // D1 is the source of truth for the list now.
-  // Keep stores in-memory only (empty until cloud hydrate runs).
+  // keep your defaults
+  trackingStartDate = trackingStartDate || new Date('2023-01-01');
+  trackingEndDate   = trackingEndDate   || new Date();
+
+  // in-memory only
   UserDatabase = { version: 1, updatedAt: Date.now(), entries: {} };
   UserAnimeList = [];
   animeList = animeList || [];
 
-  // Keep your existing repair steps safe (they’ll run on whatever is loaded later).
+  // keep repair steps safe
   normalizeIds?.();
   repairLinkRelations?.();
 }
 
 function saveToLocalStorage() {
-  // NO LIST PERSISTENCE TO LOCALSTORAGE ANYMORE.
-  // Keep tracking dates only (tiny + harmless).
-  try {
-    localStorage.setItem('trackingStartDate', trackingStartDate.toISOString());
-    localStorage.setItem('trackingEndDate', trackingEndDate.toISOString());
-  } catch {}
-
-  // Keep cloud in sync (debounced) if available
-  try { syncListToCloudDebounced?.(); } catch (_) {}
+  // ✅ HARD RULE: NOTHING gets stored on localStorage.
+  // Intentionally no-op.
 }
 
+// -------------------- Cloud status mapping (UI <-> Worker) --------------------
+function __uiStatusToCloud(ui) {
+  const s = String(ui || '').trim().toLowerCase();
+  if (s === 'watching') return 'WATCHING';
+  if (s === 'completed') return 'COMPLETED';
+  if (s === 'on hold' || s === 'on-hold') return 'ON_HOLD';
+  if (s === 'dropped') return 'DROPPED';
+  if (s === 'plan to watch' || s === 'planning') return 'PLANNING';
+
+  // if UI ever sends already-cloud values
+  if (['watching','completed','on_hold','on-hold','planning','dropped'].includes(s)) {
+    return s.toUpperCase().replace('-', '_');
+  }
+  return 'PLANNING';
+}
+
+function __cloudStatusToUI(cloud) {
+  const s = String(cloud || '').trim().toUpperCase();
+  if (s === 'WATCHING') return 'Watching';
+  if (s === 'COMPLETED') return 'Completed';
+  if (s === 'ON_HOLD') return 'On Hold';
+  if (s === 'DROPPED') return 'Dropped';
+  return 'Plan to Watch'; // PLANNING default
+}
+
+// -------------------- Worker calls --------------------
+async function listFetch(path, init = {}) {
+  // IMPORTANT: must be your Worker URL (same as auth)
+  const base = (window.ANITRACK_API_BASE || '').replace(/\/+$/, '');
+  if (!base) throw new Error('Missing window.ANITRACK_API_BASE');
+
+  const headers = {
+    'content-type': 'application/json',
+    ...(init.headers || {})
+  };
+
+  return fetch(`${base}${path}`, {
+    ...init,
+    headers,
+    credentials: 'include'
+  });
+}
+
+// -------------------- Modal -> D1 binding --------------------
+async function saveUserEntryModal() {
+  // expects: __ueActiveMalId set when opening modal
+  const malId = Number(__ueActiveMalId || 0);
+  if (!malId) return;
+
+  // grab modal fields (IDs must match what your modal already uses)
+  const statusEl = document.getElementById('ueStatus');
+  const ratingEl = document.getElementById('ueRating');
+  const epsEl    = document.getElementById('ueEpisodes');
+  const notesEl  = document.getElementById('ueNotes');
+  const favEl    = document.getElementById('ueFavorite');
+  const listEl   = document.getElementById('ueCustomList');
+
+  const payload = {
+    malId,
+    status: __uiStatusToCloud(statusEl?.value),
+    personalRating: (ratingEl?.value === '' ? null : Number(ratingEl?.value)),
+    episodeProgress: Number(epsEl?.value || 0),
+    customNotes: (notesEl?.value || '').trim() || null,
+    isFavorite: !!favEl?.checked,
+    customList: (listEl?.value || '').trim() || null
+  };
+
+  const res = await listFetch('/list/upsert', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || !data?.ok) {
+    console.error('upsert failed', res.status, data);
+    alert('Save failed.');
+    return;
+  }
+
+  // Update in-memory cloud map so UI filters refresh immediately
+  const item = data.item || {};
+  __cloudListByMalId.set(String(malId), item);
+
+  // Also reflect status into your in-memory entry (so list filters work instantly)
+  const uiStatus = __cloudStatusToUI(item.status);
+  const entry = (animeList || []).find(a => Number(__getMalIdFromEntry(a)) === malId);
+  if (entry) entry.status = uiStatus;
+
+  closeUserEntryModal?.();
+  renderAnimeCards?.();
+}
+
+async function deleteUserEntryModal() {
+  const malId = Number(__ueActiveMalId || 0);
+  if (!malId) return;
+
+  const res = await listFetch(`/list/${malId}`, { method: 'DELETE' });
+  const data = await res.json().catch(() => null);
+
+  if (!res.ok || !data?.ok) {
+    console.error('delete failed', res.status, data);
+    alert('Delete failed.');
+    return;
+  }
+
+  __cloudListByMalId.delete(String(malId));
+
+  // remove entry from UI list (or you can keep it and just mark as not tracked)
+  const idx = (animeList || []).findIndex(a => Number(__getMalIdFromEntry(a)) === malId);
+  if (idx !== -1) animeList.splice(idx, 1);
+
+  closeUserEntryModal?.();
+  renderAnimeCards?.();
+}
 
 
 /* ----------------------- CLOUD LIST (D1 via unified worker) ----------------------- */
@@ -2634,35 +2739,60 @@ function syncListToCloudDebounced() {
 
 // Called when user opens #list
 async function loadListFromCloudAndHydrate() {
-  if (!__authUser) return;
+  // Not logged in? leave current UI alone.
+  if (!isUserLoggedIn?.()) return;
 
+  let data = null;
   try {
-    const ids = await cloudListGetIds();
-
-    // If you already have some local list, keep it, but ensure cloud entries exist locally.
-    // We hydrate missing items by opening EntryDetails in MAL mode (your app supports "mal:12345"):contentReference[oaicite:2]{index=2}.
-    const localMal = new Set((animeList || []).map(__getMalIdFromEntry).filter(Boolean));
-    const missing = ids.filter(id => !localMal.has(Number(id)));
-
-    // If you have a dedicated MAL-fetch function elsewhere, you can swap this block to use it.
-    // For now: create lightweight placeholder entries so the list shows *something* immediately,
-    // and your existing MAL enrichment logic can fill details when needed.
-    for (const malId of missing) {
-      animeList.push({
-        id: `mal:${malId}`,
-        title: `MAL #${malId}`,
-        subtitle: '',
-        image: '',
-        seasons: [],
-        malId: Number(malId)
-      });
-    }
-
-    saveToLocalStorage?.();
-    renderAnimeCards?.();
+    const res = await listFetch('/list', { method: 'GET' });
+    data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) throw new Error('list_fetch_failed');
   } catch (e) {
-    console.warn('loadListFromCloudAndHydrate failed:', e);
+    console.error('Cloud list load failed:', e);
+    return;
   }
+
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  // Keep a fast map for status filtering + modal prefill
+  __cloudListByMalId = new Map();
+  for (const it of items) __cloudListByMalId.set(String(it.mal_id), it);
+
+  // Build animeList entries if missing (use your existing skeleton + Jikan hydrate pipeline)
+  // IMPORTANT: this keeps your list-grid UI exactly the same.
+  const wanted = items.map(it => ({
+    malId: String(it.mal_id),
+    uiStatus: __cloudStatusToUI(it.status)
+  }));
+
+  // ensure animeList exists
+  animeList = Array.isArray(animeList) ? animeList : [];
+
+  // add skeletons for anything not present
+  for (const w of wanted) {
+    if (!entryExistsByMalId?.(w.malId)) {
+      const entry = makeSkeletonEntry({ malId: w.malId, statusLabel: w.uiStatus });
+      animeList.unshift(entry);
+    }
+  }
+
+  // hydrate (you already have this function in your app)
+  // If this doesn’t exist in your build, tell me the name you use for MAL-by-id fetch.
+  for (const w of wanted) {
+    const entry = (animeList || []).find(a => String(a.malId) === String(w.malId));
+    if (!entry) continue;
+    entry.status = w.uiStatus;
+
+    try {
+      const item = await jikanFetchFullById(w.malId);
+      if (item) applyMALDiff(entry, item);
+    } catch (e) {
+      console.warn('Hydrate failed for', w.malId, e);
+    }
+  }
+
+  renderAnimeCards?.();
+  refreshSidebarInfo?.();
 }
 
 
@@ -7363,13 +7493,18 @@ const UI_DEFAULTS = {
   }
 };
 let UI = (() => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(UI_KEY) || 'null') || {};
-    // shallow merge to survive future additions
-    return { ...UI_DEFAULTS, ...saved, listColumns: { ...UI_DEFAULTS.listColumns, ...(saved.listColumns||{}) } };
-  } catch { return { ...UI_DEFAULTS }; }
+  // ✅ No localStorage. Keep UI settings in-memory only.
+  const saved = {};
+  return {
+    ...UI_DEFAULTS,
+    ...saved,
+    listColumns: { ...UI_DEFAULTS.listColumns, ...(saved.listColumns || {}) }
+  };
 })();
-function saveUI(){ try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch {} }
+function saveUI(){
+  // ✅ No localStorage. Intentionally no-op.
+}
+
 
 function syncViewModeBtn(){
   if (!viewModeBtn) return;
@@ -7872,27 +8007,20 @@ let __browseAbort = null;
 
 const LS_BROWSE_META_KEY = 'AniTrack_BrowseMetaDB_v1';
 
+// ✅ in-memory browse cache only (no persistence)
+let __BROWSE_META_DB_MEM = { v: 1, updatedAt: 0, entries: {} };
+
 function loadBrowseMetaDB() {
-  try {
-    const raw = localStorage.getItem(LS_BROWSE_META_KEY);
-    const db = raw ? JSON.parse(raw) : null;
-    if (!db || typeof db !== 'object') return { v: 1, updatedAt: 0, entries: {} };
-    if (!db.entries || typeof db.entries !== 'object') db.entries = {};
-    return db;
-  } catch {
-    return { v: 1, updatedAt: 0, entries: {} };
-  }
+  return __BROWSE_META_DB_MEM;
 }
 
 function saveBrowseMetaDB(db) {
   try {
     db.updatedAt = Date.now();
-    localStorage.setItem(LS_BROWSE_META_KEY, JSON.stringify(db));
-  } catch (e) {
-    // If storage is full, fail silently (app should still work).
-    console.warn('BrowseMetaDB save failed:', e);
-  }
+    __BROWSE_META_DB_MEM = db;
+  } catch {}
 }
+
 
 let __browseMetaDB = loadBrowseMetaDB();
 
