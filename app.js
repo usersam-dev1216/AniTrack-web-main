@@ -760,7 +760,7 @@ async function saveUserEntryModal(){
       renderAnimeCards?.();
     }
 
-    showNotification?.('Saved to D1.');
+    showNotification?.('Saved Changes.');
     closeUserEntryModal();
   } catch (e) {
     console.warn('saveUserEntryModal failed:', e);
