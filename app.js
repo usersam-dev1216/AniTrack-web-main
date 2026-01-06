@@ -13,10 +13,17 @@ const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 /* ---------------------------- AniTrack API (MAL Middleman) ---------------------------- */
-const MAL_API_BASE = 'https://anitrack-library.usersam1216.workers.dev';
+// ✅ Use ONE API for everything (Unified API Worker)
+// Priority: window.ANITRACK_API_BASE (set elsewhere) -> LIST_API_BASE fallback -> same-origin
+const MAL_API_BASE =
+  (window.ANITRACK_API_BASE || '').trim() ||
+  (typeof LIST_API_BASE !== 'undefined' ? String(LIST_API_BASE).trim() : '') ||
+  `${location.origin}`;
 
 function malApiUrl(path) {
-  return `${MAL_API_BASE}${path}`;
+  const base = String(MAL_API_BASE || '').replace(/\/+$/g, '');
+  const p = String(path || '');
+  return base + (p.startsWith('/') ? p : `/${p}`);
 }
 
 const __fullPayloadPromises = new Map();
@@ -32,11 +39,27 @@ function getFullPayloadCached(malId, { signal } = {}) {
   let p = __fullPayloadPromises.get(key);
   if (!p) {
     p = fetch(malApiUrl(`/api/anime/${encodeURIComponent(key)}/full`), { signal })
-      .then(r => (r.ok ? r.json() : null))
-      .catch(() => null);
+      .then(async (r) => {
+        // helpful debug if something breaks again
+        if (!r.ok) {
+          console.warn('[full payload] fetch failed', r.status, r.statusText, key);
+          return null;
+        }
+        return await r.json().catch(() => null);
+      })
+      .catch((e) => {
+        console.warn('[full payload] fetch error', key, e);
+        return null;
+      });
+
     __fullPayloadPromises.set(key, p);
   }
   return p;
+}
+
+// ✅ Missing function in your current app.js (this is why sync never populated anything)
+async function malFetchFullById(malId, { signal } = {}) {
+  return await getFullPayloadCached(malId, { signal });
 }
 
 /* -------------------------------------------------------
