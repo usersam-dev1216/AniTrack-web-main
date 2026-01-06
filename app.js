@@ -3317,61 +3317,47 @@ function __wireHomeRowShell(shell){
   const row = shell.querySelector('.home-row');
   if (!row) return;
 
-  const section = shell.closest('section.home-section') || shell.closest('.home-section') || null;
+  const section = shell.closest?.('.home-section') || null;
 
-  // Header buttons (new)
-  const headPrev = section?.querySelector?.('.home-section-head .home-head-nav.prev') || null;
-  const headNext = section?.querySelector?.('.home-section-head .home-head-nav.next') || null;
+  const prev =
+    shell.querySelector('.home-row-nav.prev') ||
+    section?.querySelector('.home-head-nav.prev') ||
+    null;
 
-  // Shell buttons (old)
-  const shellPrev = shell.querySelector('.home-row-nav.prev') || null;
-  const shellNext = shell.querySelector('.home-row-nav.next') || null;
+  const next =
+    shell.querySelector('.home-row-nav.next') ||
+    section?.querySelector('.home-head-nav.next') ||
+    null;
 
-  const step = () => Math.max(190, Math.floor(row.clientWidth * 0.6));
+  if (!prev || !next) return;
 
-  // Bind helper (dedupes listeners)
-  function bind(btn, dir){
-    if (!btn) return;
+  const step = () => Math.max(220, Math.floor(row.clientWidth * 0.85));
 
-    // remove old handler if re-wired
-    if (btn.__homeRowClick) btn.removeEventListener('click', btn.__homeRowClick);
+  function updateNavState(){
+    const canScroll = row.scrollWidth > row.clientWidth + 4;
 
-    btn.__homeRowClick = () => {
-      row.scrollBy({ left: dir * step(), behavior: 'smooth' });
-    };
+    prev.disabled = false;
+    next.disabled = false;
 
-    btn.addEventListener('click', btn.__homeRowClick);
+    prev.classList.toggle('disabled', !canScroll);
+    next.classList.toggle('disabled', !canScroll);
   }
 
-  // IMPORTANT: bind BOTH sets if they exist
-  bind(shellPrev, -1);
-  bind(shellNext,  1);
-  bind(headPrev,  -1);
-  bind(headNext,   1);
+  prev.addEventListener('click', () => {
+    row.scrollBy({ left: -step(), behavior: 'smooth' });
+  });
 
-  const update = () => {
-    const max = Math.max(0, row.scrollWidth - row.clientWidth);
-    const overflow = max > 4;
+  next.addEventListener('click', () => {
+    row.scrollBy({ left: step(), behavior: 'smooth' });
+  });
 
-    shell.dataset.noOverflow = overflow ? '0' : '1';
+  row.addEventListener('scroll', updateNavState);
+  window.addEventListener('resize', updateNavState);
 
-    const leftDisabled  = !overflow || row.scrollLeft <= 2;
-    const rightDisabled = !overflow || row.scrollLeft >= (max - 2);
-
-    // update BOTH sets
-    if (shellPrev) shellPrev.disabled = leftDisabled;
-    if (headPrev)  headPrev.disabled  = leftDisabled;
-
-    if (shellNext) shellNext.disabled = rightDisabled;
-    if (headNext)  headNext.disabled  = rightDisabled;
-  };
-
-  shell.__rowNavUpdate = update;
-
-  row.addEventListener('scroll', () => requestAnimationFrame(update), { passive: true });
-  window.addEventListener('resize', () => requestAnimationFrame(update));
-
-  requestAnimationFrame(update);
+  // 🔥 CRITICAL: re-check after layout + images
+  requestAnimationFrame(updateNavState);
+  setTimeout(updateNavState, 150);
+  setTimeout(updateNavState, 400);
 }
 
 
@@ -9705,6 +9691,8 @@ function init() {
 
   
   renderAnimeCards();
+  document.querySelectorAll('.home-row-shell').forEach(__wireHomeRowShell);
+
   initSidebarInfoRotator();
   
   // NEW: make Home the opening “page”
