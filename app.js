@@ -519,53 +519,34 @@ async function listFetch(path, init = {}) {
   });
 }
 
-
-
-
-
-
-// Loads MAL IDs from cloud and makes sure your local "animeList" contains those IDs.
-// This does NOT change your UI design — it just ensures #list has the right items.
-async function loadListFromCloudAndHydrate() {
-  // only if logged in
-  if (!isUserLoggedIn()) return;
-
-  const res = await listFetch('/list', { method: 'GET' });
-  const j = await __safeJson(res);
-
-  if (!res.ok || !j?.ok) {
-    throw new Error(j?.error || `list_fetch_failed_${res.status}`);
-  }
-
-  const items = Array.isArray(j.items) ? j.items : [];
-  const ids = items
-    .map(x => Number(x?.mal_id))
-    .filter(n => Number.isFinite(n) && n > 0);
-
-  // Merge into local list as placeholders.
-  // Your existing MAL auto-sync can later enrich details.
-  const existing = new Set((animeList || []).map(a => String(a?.id)));
-
-  let added = 0;
-  for (const malId of ids) {
-    const key = `mal:${malId}`;
-    if (existing.has(key)) continue;
-
-    (animeList || (animeList = [])).push({
-      id: key,
-      malId,
-      title: `MAL #${malId}`,
-      subtitle: '',
-      image: '',
-      status: (items.find(i => Number(i?.mal_id) === malId)?.status) || 'Plan to Watch',
-      relations: [],
-      isFavorite: false
-    });
-    added++;
-  }
-
-  if (added) saveToLocalStorage();
+// --- Status mapping (UI <-> API) ---
+// UI dropdown values: Watching / Completed / On Hold / Dropped / Plan to Watch
+// API values stored in D1: WATCHING / COMPLETED / ON_HOLD / DROPPED / PLANNING
+function __statusUiToApi(v) {
+  const s = String(v || '').trim();
+  if (!s) return 'PLANNING';
+  if (s === 'Watching') return 'WATCHING';
+  if (s === 'Completed') return 'COMPLETED';
+  if (s === 'On Hold') return 'ON_HOLD';
+  if (s === 'Dropped') return 'DROPPED';
+  if (s === 'Plan to Watch') return 'PLANNING';
+  // if something already API-like slips through
+  return s.toUpperCase().replace(/\s+/g, '_');
 }
+
+function __statusApiToUi(v) {
+  const s = String(v || '').trim().toUpperCase();
+  if (!s) return '';
+  if (s === 'WATCHING') return 'Watching';
+  if (s === 'COMPLETED') return 'Completed';
+  if (s === 'ON_HOLD') return 'On Hold';
+  if (s === 'DROPPED') return 'Dropped';
+  if (s === 'PLANNING' || s === 'PLAN_TO_WATCH') return 'Plan to Watch';
+  // fallback: try to prettify unknown tokens
+  return s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+
 
 /* =========================
    Cloud list cache (for modal prefill)
@@ -672,7 +653,7 @@ async function openUserEntryModalFromMalId(malId){
   // prefill from cloud cache
   const it = CloudListByMalId.get(mid) || null;
 
-  __getEl('ueStatus').value = it?.status ?? '';
+  __getEl('ueStatus').value = __statusApiToUi(it?.status) ?? '';
   __getEl('ueScore').value = String(it?.personal_rating ?? 0);
   __getEl('ueStartDate').value = (it?.started_watching || '').slice(0,10);
   __getEl('ueFinishDate').value = (it?.ended_watching || '').slice(0,10);
@@ -704,71 +685,81 @@ function closeUserEntryModal(){
 
 async function saveUserEntryModal(){
   if (!__ueActiveMalId) return;
-
-  if (!isUserLoggedIn()) {
-    showNotification?.('Login required to save.');
+  if (!isUserLoggedIn?.()) {
+    showNotification?.('Please log in first.');
     return;
   }
 
   const mid = Number(__ueActiveMalId);
-  if (!Number.isFinite(mid) || mid <= 0) return;
 
   const payload = {
     malId: mid,
-    status: __getEl('ueStatus')?.value || 'PLANNING',
+    status: __statusUiToApi(__getEl('ueStatus')?.value || ''),
     personalRating: (() => {
-      const v = String(__getEl('ueScore')?.value || '').trim();
-      const n = Number(v);
-      return (!v || v === '0' || !Number.isFinite(n) || n <= 0) ? null : n;
+      const raw = __getEl('ueScore')?.value;
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? n : null; // API supports null
     })(),
-    startedWatching: (__getEl('ueStartDate')?.value || '').trim() || null,
-    endedWatching: (__getEl('ueFinishDate')?.value || '').trim() || null,
-    customNotes: (__getEl('ueNotes')?.value || '').trim() || null,
+    startedWatching: __getEl('ueStartDate')?.value || '',
+    endedWatching: __getEl('ueFinishDate')?.value || '',
+    customNotes: (__getEl('ueNotes')?.value || '').toString(),
     isFavorite: !!__getEl('ueFavorite')?.checked,
-    totalRewatches: Number(__getEl('ueRewatches')?.value || 0) || 0,
-    customList: (__getEl('ueCustomList')?.value || '').trim() || null,
-    episodeProgress: Number(__getEl('ueEpWatched')?.value || 0) || 0
+    totalRewatches: (() => {
+      const n = Number(__getEl('ueRewatches')?.value || 0);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    })(),
+    customList: (__getEl('ueCustomList')?.value || '').toString(),
+    episodeProgress: (() => {
+      let n = Number(__getEl('ueEpWatched')?.value || 0);
+      if (!Number.isFinite(n) || n < 0) n = 0;
+      if (__ueActiveMeta?.totalEpisodes > 0 && n > __ueActiveMeta.totalEpisodes) n = __ueActiveMeta.totalEpisodes;
+      return n;
+    })()
   };
-
-  // clamp
-  if (payload.episodeProgress < 0) payload.episodeProgress = 0;
-  if (__ueActiveMeta?.totalEpisodes > 0 && payload.episodeProgress > __ueActiveMeta.totalEpisodes) {
-    payload.episodeProgress = __ueActiveMeta.totalEpisodes;
-  }
 
   try {
     const res = await listFetch('/list/upsert', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
+
     const j = await __safeJson(res);
-    if (!res.ok || !j?.ok) throw new Error(j?.error || `save_failed_${res.status}`);
+    if (!res.ok || !j?.ok) throw new Error(j?.error || `upsert_failed_${res.status}`);
 
-    // cache for prefill next time
-    if (j?.item) CloudListByMalId.set(mid, { ...j.item, mal_id: mid });
+    // Update modal cache so re-opening "+" shows prefilled values instantly
+    const row = j?.item ? { ...j.item } : null;
+    if (row) {
+      const malId = Number(row?.mal_id || payload.malId);
+      if (malId) CloudListByMalId.set(malId, row);
+    }
 
-    showNotification?.('Saved');
+    // Also update the in-memory UI list status (so #list reflects it immediately)
+    const key = `mal:${mid}`;
+    const a = (animeList || []).find(x => String(x?.id) === key);
+    if (a) a.status = __statusApiToUi(payload.status) || a.status;
+
+    // If user is currently on #list, refresh list from cloud and re-render
+    if (location.hash === '#list') {
+      try { await loadListFromCloudAndHydrate(); } catch {}
+      renderAnimeCards?.();
+    }
+
+    showNotification?.('Saved to your list.');
     closeUserEntryModal();
-
-    // refresh list view immediately
-    try { await loadListFromCloudAndHydrate(); } catch (_) {}
-    try { renderAnimeCards?.(); } catch (_) {}
   } catch (e) {
-    console.error('saveUserEntryModal failed:', e);
-    showNotification?.('Save failed');
+    console.warn('saveUserEntryModal failed:', e);
+    showNotification?.('Save failed. Check console.');
   }
 }
 
 async function deleteUserEntryModal(){
   if (!__ueActiveMalId) return;
-
-  if (!isUserLoggedIn()) {
-    showNotification?.('Login required to remove.');
+  if (!isUserLoggedIn?.()) {
+    showNotification?.('Please log in first.');
     return;
   }
 
   const mid = Number(__ueActiveMalId);
-  if (!Number.isFinite(mid) || mid <= 0) return;
 
   try {
     const res = await listFetch(`/list/${mid}`, { method: 'DELETE' });
@@ -777,17 +768,24 @@ async function deleteUserEntryModal(){
 
     CloudListByMalId.delete(mid);
 
-    showNotification?.('Removed');
-    closeUserEntryModal();
+    // Remove from in-memory UI list too
+    const key = `mal:${mid}`;
+    if (Array.isArray(animeList)) {
+      animeList = animeList.filter(x => String(x?.id) !== key);
+    }
 
-    try { await loadListFromCloudAndHydrate(); } catch (_) {}
-    try { renderAnimeCards?.(); } catch (_) {}
+    if (location.hash === '#list') {
+      try { await loadListFromCloudAndHydrate(); } catch {}
+      renderAnimeCards?.();
+    }
+
+    showNotification?.('Removed from your list.');
+    closeUserEntryModal();
   } catch (e) {
-    console.error('deleteUserEntryModal failed:', e);
-    showNotification?.('Remove failed');
+    console.warn('deleteUserEntryModal failed:', e);
+    showNotification?.('Remove failed. Check console.');
   }
 }
-
 
 
 async function deleteUserEntryModal(){
@@ -2765,57 +2763,84 @@ function syncListToCloudDebounced() {
 
 
 
-// Called when user opens #list
+// Loads user_entries from your Worker (/list) and hydrates your in-memory animeList.
+// - NO localStorage
+// - Keeps your list-grid UI untouched (you already render from animeList)
+// - Also populates CloudListByMalId so the "+" modal pre-fills next time
 async function loadListFromCloudAndHydrate() {
-  if (!isUserLoggedIn()) return;
+  // Only if logged in (cookie session must exist)
+  if (!isUserLoggedIn?.()) return;
 
-  try {
-    const res = await listFetch('/list', { method: 'GET' });
-    const j = await __safeJson(res);
-    if (!res.ok || !j?.ok) throw new Error(j?.error || `list_fetch_failed_${res.status}`);
+  // Ensure globals exist
+  if (!window.CloudListByMalId) window.CloudListByMalId = new Map();
+  if (!Array.isArray(window.animeList)) window.animeList = [];
 
-    const items = Array.isArray(j.items) ? j.items : [];
+  const res = await listFetch('/list', { method: 'GET' });
+  const j = await __safeJson(res);
 
-    // cache full rows for modal prefill
-    CloudListByMalId.clear();
-    for (const it of items) {
-      const mid = Number(it?.mal_id);
-      if (!Number.isFinite(mid) || mid <= 0) continue;
-      CloudListByMalId.set(mid, it);
-    }
+  if (!res.ok || !j?.ok) {
+    throw new Error(j?.error || `list_fetch_failed_${res.status}`);
+  }
 
-    // ensure local list contains these malIds (placeholders are fine)
-    const localMal = new Set((animeList || []).map(__getMalIdFromEntry).filter(Boolean));
-    const missing = items
-      .map(it => Number(it?.mal_id))
-      .filter(mid => Number.isFinite(mid) && mid > 0 && !localMal.has(mid));
+  const items = Array.isArray(j.items) ? j.items : [];
 
-    for (const malId of missing) {
-      (animeList || (animeList = [])).push({
-        id: `mal:${malId}`,
+  // Fill CloudListByMalId (used for modal prefill)
+  CloudListByMalId.clear();
+  for (const it of items) {
+    const mid = Number(it?.mal_id);
+    if (Number.isFinite(mid) && mid > 0) CloudListByMalId.set(mid, it);
+  }
+
+  // Rebuild / merge animeList as MAL placeholders.
+  // We keep existing objects if they already exist (so images/titles from your MAL cache stay).
+  const keep = new Map(animeList.map(a => [String(a?.id), a]));
+  const next = [];
+
+  for (const it of items) {
+    const malId = Number(it?.mal_id);
+    if (!Number.isFinite(malId) || malId <= 0) continue;
+
+    const key = `mal:${malId}`;
+    const existing = keep.get(key);
+
+    if (existing) {
+      // Keep MAL-enriched fields; just ensure status reflects cloud
+      existing.malId = malId;
+      if (typeof __statusApiToUi === 'function') {
+        existing.status = __statusApiToUi(it?.status) || existing.status;
+      } else {
+        existing.status = it?.status || existing.status;
+      }
+      next.push(existing);
+    } else {
+      // Placeholder entry until your MAL cache/details loader enriches it
+      next.push({
+        id: key,
+        malId,
         title: `MAL #${malId}`,
         subtitle: '',
         image: '',
-        seasons: [],
-        malId: Number(malId),
-        // keep status compatible with your UI filter strings
-        status: (CloudListByMalId.get(Number(malId))?.status) || 'Plan to Watch'
+        status: (typeof __statusApiToUi === 'function')
+          ? (__statusApiToUi(it?.status) || 'Plan to Watch')
+          : (it?.status || 'PLANNING'),
+        relations: [],
+        isFavorite: false
       });
     }
-
-    // update status for existing items too
-    for (const a of (animeList || [])) {
-      const mid = __getMalIdFromEntry(a);
-      if (!mid) continue;
-      const row = CloudListByMalId.get(mid);
-      if (row?.status) a.status = row.status;
-    }
-
-    renderAnimeCards?.();
-  } catch (e) {
-    console.warn('loadListFromCloudAndHydrate failed:', e);
   }
+
+  // Keep any non-MAL items you may have in animeList (optional safety)
+  for (const a of animeList) {
+    const id = String(a?.id || '');
+    if (!id.startsWith('mal:')) next.push(a);
+  }
+
+  animeList = next;
+
+  // If you're currently on #list, re-render immediately
+  try { if (location.hash === '#list') renderAnimeCards?.(); } catch {}
 }
+
 
 
 
