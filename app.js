@@ -3310,23 +3310,26 @@ function __getTotalEpisodesFromAnime(a){
 
 
 /* --------------------------- Home row arrow nav --------------------------- */
+
 function __wireHomeRowShell(shell){
-  if (!shell || shell.__rowNavWired) return;
-  shell.__rowNavWired = true;
+  if (!shell) return;
 
   const row = shell.querySelector('.home-row');
   if (!row) return;
 
   const section = shell.closest?.('.home-section') || null;
 
+  // Prefer the header arrows if present, otherwise fall back to the inside-shell arrows
   const prev =
-    shell.querySelector('.home-row-nav.prev') ||
+    section?.querySelector('.home-section-head .home-head-nav.prev') ||
     section?.querySelector('.home-head-nav.prev') ||
+    shell.querySelector('.home-row-nav.prev') ||
     null;
 
   const next =
-    shell.querySelector('.home-row-nav.next') ||
+    section?.querySelector('.home-section-head .home-head-nav.next') ||
     section?.querySelector('.home-head-nav.next') ||
+    shell.querySelector('.home-row-nav.next') ||
     null;
 
   if (!prev || !next) return;
@@ -3335,13 +3338,28 @@ function __wireHomeRowShell(shell){
 
   function updateNavState(){
     const canScroll = row.scrollWidth > row.clientWidth + 4;
+    if (!canScroll){
+      prev.disabled = true;
+      next.disabled = true;
+      return;
+    }
 
-    prev.disabled = false;
-    next.disabled = false;
-
-    prev.classList.toggle('disabled', !canScroll);
-    next.classList.toggle('disabled', !canScroll);
+    // enable + clamp by actual scroll position
+    prev.disabled = row.scrollLeft <= 2;
+    next.disabled = (row.scrollLeft + row.clientWidth) >= (row.scrollWidth - 2);
   }
+
+  // If already wired, just refresh state (this is the key fix)
+  if (shell.__rowNavWired){
+    updateNavState();
+    // also schedule a couple re-checks for images/layout
+    requestAnimationFrame(updateNavState);
+    setTimeout(updateNavState, 200);
+    setTimeout(updateNavState, 500);
+    return;
+  }
+
+  shell.__rowNavWired = true;
 
   prev.addEventListener('click', () => {
     row.scrollBy({ left: -step(), behavior: 'smooth' });
@@ -3351,13 +3369,16 @@ function __wireHomeRowShell(shell){
     row.scrollBy({ left: step(), behavior: 'smooth' });
   });
 
-  row.addEventListener('scroll', updateNavState);
+  row.addEventListener('scroll', updateNavState, { passive: true });
   window.addEventListener('resize', updateNavState);
 
-  // 🔥 CRITICAL: re-check after layout + images
+  // expose refresher so render functions can call it
+  shell.__updateNavState = updateNavState;
+
+  // initial + post-layout checks
   requestAnimationFrame(updateNavState);
-  setTimeout(updateNavState, 150);
-  setTimeout(updateNavState, 400);
+  setTimeout(updateNavState, 200);
+  setTimeout(updateNavState, 500);
 }
 
 
@@ -7912,51 +7933,45 @@ const valOrNA = (v) => {
   setHTML('entryDetailsAnimeFormat', parts.join(' <span class="detail-dot">•</span> '));
 
   // Poster (+ Add/Status CTA)
-  const imgBox = document.getElementById('entryDetailsAnimeImage');
-  if (imgBox) {
-    const malId = (() => {
-      const mid = Number(a?.malId || a?.mal_id || 0);
-      if (mid) return mid;
-      const m = String(a?.id || '').match(/mal:(\d+)/i);
-      return m ? Number(m[1]) : 0;
-    })();
+  // Poster
+const imgBox = document.getElementById('entryDetailsAnimeImage');
+if (imgBox) {
+  imgBox.innerHTML = a.image
+    ? `<img src="${esc(a.image)}" alt="${esc(a.title || 'Anime')}">`
+    : '<i class="fas fa-image"></i>';
+}
 
-    const cloudRow = malId ? (CloudListByMalId?.get?.(malId) || null) : null;
-    const inList = !!cloudRow;
+// Poster bottom box (Add To List / Status) — BELOW poster, not inside it
+const listBox = document.getElementById('entryDetailsListBox');
+if (listBox) {
+  const malId = (() => {
+    const mid = Number(a?.malId || a?.mal_id || 0);
+    if (mid) return mid;
+    const m = String(a?.id || '').match(/mal:(\d+)/i);
+    return m ? Number(m[1]) : 0;
+  })();
 
-    // 조건:
-    // - not in list => "Add To List"
-    // - already in list => show current status (fallback "Status")
-    const btnText = inList
-      ? (__statusApiToUi?.(cloudRow?.status) || 'Status')
-      : 'Add To List';
+  const inList = !!(malId && (CloudListByMalId?.get?.(malId) || null));
 
-    const posterHTML = a.image
-      ? `<img src="${esc(a.image)}" alt="${esc(a.title || 'Anime')}">`
-      : '<i class="fas fa-image"></i>';
+  // Conditions:
+  // - not in list => "Add To List"
+  // - already added => "Status"
+  listBox.textContent = inList ? 'Status' : 'Add To List';
 
-    imgBox.innerHTML = `
-      ${posterHTML}
-      <button
-        class="entrydetails-list-cta"
-        id="entryDetailsListCta"
-        type="button"
-        ${malId ? `data-mal-id="${malId}"` : ''}
-      >${esc(btnText)}</button>
-    `;
-
-    const btn = imgBox.querySelector('#entryDetailsListCta');
-    if (btn && !btn.__wired) {
-      btn.__wired = true;
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const mid = Number(btn.dataset.malId || malId || 0);
-        if (!mid) return;
-        openUserEntryModalFromMalId?.(mid);
-      });
-    }
+  if (!listBox.__wired) {
+    listBox.__wired = true;
+    listBox.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const mid = Number(listBox.dataset.malId || 0);
+      if (mid) openUserEntryModalFromMalId?.(mid);
+    });
   }
+
+  // keep current malId on the button
+  listBox.dataset.malId = String(malId || '');
+}
+
 
   // Synopsis
   setText('entryDetailsSynopsis', valOrNA(a.description || a.synopsis || a.summary));

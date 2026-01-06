@@ -1322,7 +1322,7 @@ color: var(--text-secondary);
 
 .home-row .anime-card .card-overlay-title{
   font-size: .95rem;
-  font-weight: 500;
+  font-weight: 700;
   margin: 0;
 }
 
@@ -1509,6 +1509,49 @@ color: var(--text-secondary);
   .home-skeleton{ flex-basis: 210px; height: 168px; }
   .home-row-nav{ display: none; }
 }
+
+
+/* EntryDetails: poster + button stacked */
+.entrydetails-page .detail-poster-stack{
+  width: 230px;            /* same as poster */
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The button BELOW the poster (not inside it) */
+.entrydetails-page .entrydetails-listbox{
+  height: 46px;
+  width: 100%;
+
+  border-radius: 14px;
+  border: 2px solid rgba(249,168,212,.85);
+  background: rgba(10,10,20,.35);
+  backdrop-filter: blur(6px);
+
+  color: rgba(255,255,255,.92);
+  font-weight: 800;
+  letter-spacing: .2px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  user-select: none;
+
+  box-shadow: 0 16px 40px rgba(0,0,0,.35);
+}
+
+.entrydetails-page .entrydetails-listbox:hover{
+  transform: translateY(-1px);
+}
+.entrydetails-page .entrydetails-listbox:active{
+  transform: translateY(0);
+}
+
+
 
 /* ================ HEADER & NAVIGATION ================ */
 
