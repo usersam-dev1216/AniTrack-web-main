@@ -12,30 +12,19 @@
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-/* ---------------------------- AniTrack API + MAL/Jikan Helpers ---------------------------- */
-/**
- * IMPORTANT:
- * - Your current auth/list API does NOT serve `/api/anime/:id/full`, so your MAL sync was fetching null.
- * - `applyMALDiff()` expects a Jikan-style FULL anime object (aired/broadcast/producers/images/etc).
- * - So: we fetch Jikan `/v4/anime/:id/full` and return `json.data`.
- */
-
-const JIKAN_BASE = 'https://api.jikan.moe/v4';
-
-// Keep MAL_API_BASE helpers in case other parts still use it.
-const MAL_API_BASE =
-  (window.ANITRACK_API_BASE || '').trim() ||
-  (typeof LIST_API_BASE !== 'undefined' ? String(LIST_API_BASE).trim() : '') ||
-  `${location.origin}`;
+/* ---------------------------- AniTrack API (MAL Middleman) ---------------------------- */
+const MAL_API_BASE = 'https://anitrack-library.usersam1216.workers.dev';
 
 function malApiUrl(path) {
-  const base = String(MAL_API_BASE || '').replace(/\/+$/g, '');
-  const p = String(path || '');
-  return base + (p.startsWith('/') ? p : `/${p}`);
+  return `${MAL_API_BASE}${path}`;
 }
 
-// Optional: keep this around (some code may still call it), but it might 404 on your auth/list worker.
 const __fullPayloadPromises = new Map();
+
+/**
+ * Fetches /api/anime/:id/full once per malId (client-side memoization).
+ * Server-side is also cached in D1 (your MAL-once plan).
+ */
 function getFullPayloadCached(malId, { signal } = {}) {
   const key = String(malId ?? '').trim();
   if (!key) return Promise.resolve(null);
@@ -43,58 +32,11 @@ function getFullPayloadCached(malId, { signal } = {}) {
   let p = __fullPayloadPromises.get(key);
   if (!p) {
     p = fetch(malApiUrl(`/api/anime/${encodeURIComponent(key)}/full`), { signal })
-      .then(r => (r.ok ? r.json().catch(() => null) : null))
+      .then(r => (r.ok ? r.json() : null))
       .catch(() => null);
-
     __fullPayloadPromises.set(key, p);
   }
   return p;
-}
-
-// Jikan full cache (prevents hammering Jikan during sweep)
-const __jikanFullPromises = new Map();
-
-async function malFetchFullById(malId, { signal } = {}) {
-  const id = String(malId ?? '').trim();
-  if (!id) return null;
-
-  // memoize per id
-  if (__jikanFullPromises.has(id)) return __jikanFullPromises.get(id);
-
-  const p = (async () => {
-    // 1) Try your middleman (if you later add the route, this will start working automatically)
-    const payload = await getFullPayloadCached(id, { signal });
-
-    // If middleman returns a Jikan-like object already, accept it.
-    const candidate =
-      payload?.data?.data ?? payload?.data ?? payload?.details ?? payload?.node ?? payload?.anime ?? null;
-
-    if (candidate && (candidate.images || candidate.aired || candidate.broadcast || candidate.producers)) {
-      return candidate;
-    }
-
-    // 2) Fallback: Jikan v4 full (this is what applyMALDiff expects)
-    const res = await fetch(`${JIKAN_BASE}/anime/${encodeURIComponent(id)}/full`, { signal });
-
-    if (res.status === 429) {
-      const e = new Error('rate_limited');
-      e._rateLimitHit = true;
-      throw e;
-    }
-
-    if (!res.ok) return null;
-
-    const j = await res.json().catch(() => null);
-    return j?.data ?? null;
-  })();
-
-  __jikanFullPromises.set(id, p);
-  return p;
-}
-
-// Alias (some parts of your app still reference this name)
-async function jikanFetchFullById(malId, { signal } = {}) {
-  return await malFetchFullById(malId, { signal });
 }
 
 /* --- MAL score hydration for cards (fills missing scores; avoids "" -> 0.00) --- */
@@ -7523,10 +7465,10 @@ const UI_DEFAULTS = {
     type: true,
     season: true,
     status: true,
-    genres: false,
-    themes: false,
+    genres: true,
+    themes: true,
     episodes: true,
-    duration: false,
+    duration: true,
     malScore: true,
     rating: true
   }
@@ -9520,17 +9462,7 @@ function applyRoute(){
       console.warn('List cloud load failed:', e);
       // fallback: keep local list
     }
-
-    // ✅ LOCK: always list mode
-    UI.viewMode = 'list';
-    syncViewModeBtn?.();
-    syncListSidebarViewBtn?.();
-
-    // 1) render immediately (you'll at least see the rows)
-    renderAnimeCards();
-
-    // 2) then enrich the skeletons with MAL data so fields populate (type/season/genres/etc.)
-    runMALSyncSweep?.('MAL sync (after cloud hydrate)').catch(console.error);
+    renderAnimeCards(); // respects card/list mode
   })();
 } else if (isBrowse) {
 
@@ -9589,11 +9521,18 @@ function initRouting(){
 
 
 
-// View mode toggles are disabled — list-only UI
-if (lsViewBtn) lsViewBtn.style.display = 'none';
-if (typeof viewModeBtn !== 'undefined' && viewModeBtn) viewModeBtn.style.display = 'none';
-UI.viewMode = 'list';
-saveUI();
+// View mode (list sidebar)
+lsViewBtn?.addEventListener('click', () => {
+  UI.viewMode = (UI.viewMode === 'list') ? 'card' : 'list';
+  saveUI();
+
+  // sync view buttons that exist
+  syncViewModeBtn();
+  syncListSidebarViewBtn();
+  // syncFloatingSidebarViewBtn(); // <-- REMOVE (not defined in this build)
+
+  renderAnimeCards();
+});
 
 
 /* --------------------------------- Init ----------------------------------- */
@@ -9603,12 +9542,6 @@ function init() {
   initAuth();
   __initHomeRowNav();
   __initHomeSectionFilters();
-
-  // Hard lock: list mode only
-  UI.viewMode = 'list';
-  saveUI();
-  if (lsViewBtn) lsViewBtn.style.display = 'none';
-  if (typeof viewModeBtn !== 'undefined' && viewModeBtn) viewModeBtn.style.display = 'none';
 
   syncViewModeBtn();
   syncListSidebarViewBtn();
