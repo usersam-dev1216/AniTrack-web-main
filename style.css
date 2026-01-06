@@ -5982,7 +5982,7 @@ ease;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 150px;
+  gap: 80px;
 }
 
 /* Push stats row down within the hero when there's extra height */
