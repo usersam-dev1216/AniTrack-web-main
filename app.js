@@ -1115,12 +1115,18 @@ function syncAuthUI() {
       : 'Welcome!';
   }
 
-  if (headerProfileLink1) {
-    headerProfileLink1.textContent = logged ? 'Profile' : 'Login';
-    headerProfileLink1.setAttribute('href', logged ? '#profile' : '#userlogin');
-  }
+if (headerProfileLink1) {
+  headerProfileLink1.textContent = logged ? 'Profile' : 'Login';
+  headerProfileLink1.setAttribute('href', logged ? '#profile' : '#userlogin');
+}
 
-  // ----- Header user icon picture -----
+if (headerProfileLink2) {
+  headerProfileLink2.textContent = logged ? 'Account' : 'Sign Up';
+  headerProfileLink2.setAttribute('href', logged ? '#account' : '#usersignup');
+}
+
+// ----- Header user icon picture -----
+
   if (navProfileBtn) {
     const img = document.getElementById('headerPfpImg');
     const url = logged ? String(u?.pfp_url ?? u?.pfpUrl ?? '').trim() : '';
