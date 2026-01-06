@@ -705,11 +705,8 @@ function closeUserEntryModal(){
 async function saveUserEntryModal(){
   if (!__ueActiveMalId) return;
 
-  // must be logged in to save to D1
   if (!isUserLoggedIn()) {
     showNotification?.('Login required to save.');
-    const note = __getEl('ueGuestNote');
-    if (note) note.hidden = false;
     return;
   }
 
@@ -718,11 +715,11 @@ async function saveUserEntryModal(){
 
   const payload = {
     malId: mid,
-    status: __getEl('ueStatus')?.value || '',
+    status: __getEl('ueStatus')?.value || 'PLANNING',
     personalRating: (() => {
-      const v = String(__getEl('ueScore')?.value || '0');
+      const v = String(__getEl('ueScore')?.value || '').trim();
       const n = Number(v);
-      return (!Number.isFinite(n) || n <= 0) ? null : n; // 0 => null
+      return (!v || v === '0' || !Number.isFinite(n) || n <= 0) ? null : n;
     })(),
     startedWatching: (__getEl('ueStartDate')?.value || '').trim() || null,
     endedWatching: (__getEl('ueFinishDate')?.value || '').trim() || null,
@@ -740,7 +737,6 @@ async function saveUserEntryModal(){
   }
 
   try {
-    // ✅ REAL SAVE to D1
     const res = await listFetch('/list/upsert', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -748,19 +744,47 @@ async function saveUserEntryModal(){
     const j = await __safeJson(res);
     if (!res.ok || !j?.ok) throw new Error(j?.error || `save_failed_${res.status}`);
 
-    // update cache so modal reopens filled
+    // cache for prefill next time
     if (j?.item) CloudListByMalId.set(mid, { ...j.item, mal_id: mid });
 
-    showNotification?.('Saved to cloud');
+    showNotification?.('Saved');
     closeUserEntryModal();
 
-    // refresh list page if needed
-    try { await loadListFromCloudAndHydrate(); } catch {}
-    try { renderAnimeCards?.(); } catch {}
-    try { renderHomePage?.(); } catch {}
+    // refresh list view immediately
+    try { await loadListFromCloudAndHydrate(); } catch (_) {}
+    try { renderAnimeCards?.(); } catch (_) {}
   } catch (e) {
     console.error('saveUserEntryModal failed:', e);
     showNotification?.('Save failed');
+  }
+}
+
+async function deleteUserEntryModal(){
+  if (!__ueActiveMalId) return;
+
+  if (!isUserLoggedIn()) {
+    showNotification?.('Login required to remove.');
+    return;
+  }
+
+  const mid = Number(__ueActiveMalId);
+  if (!Number.isFinite(mid) || mid <= 0) return;
+
+  try {
+    const res = await listFetch(`/list/${mid}`, { method: 'DELETE' });
+    const j = await __safeJson(res);
+    if (!res.ok || !j?.ok) throw new Error(j?.error || `delete_failed_${res.status}`);
+
+    CloudListByMalId.delete(mid);
+
+    showNotification?.('Removed');
+    closeUserEntryModal();
+
+    try { await loadListFromCloudAndHydrate(); } catch (_) {}
+    try { renderAnimeCards?.(); } catch (_) {}
+  } catch (e) {
+    console.error('deleteUserEntryModal failed:', e);
+    showNotification?.('Remove failed');
   }
 }
 
@@ -6856,16 +6880,22 @@ document.body.addEventListener('click', (e) => {
   if (modal) closeWithAnimation(modal);
 });
 
-  // User Entry modal actions (List edit)
-  document.getElementById('ueSaveBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    saveUserEntryModal();
-  });
+  // User Entry modal actions (delegated; cannot "miss" binding)
+  document.addEventListener('click', async (e) => {
+    const saveBtn = e.target.closest('#ueSaveBtn');
+    if (saveBtn) {
+      e.preventDefault();
+      try { await saveUserEntryModal(); } catch (err) { console.error(err); }
+      return;
+    }
 
-  document.getElementById('ueDeleteBtn')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    if (!confirm('Remove this entry from your list?')) return;
-    deleteUserEntryModal();
+    const delBtn = e.target.closest('#ueDeleteBtn');
+    if (delBtn) {
+      e.preventDefault();
+      if (!confirm('Remove this entry from your list?')) return;
+      try { await deleteUserEntryModal(); } catch (err) { console.error(err); }
+      return;
+    }
   });
 
   // Sidebar auth (guest vs user)
