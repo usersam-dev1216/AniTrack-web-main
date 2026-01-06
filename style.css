@@ -6471,6 +6471,7 @@ body.route-list .list-sidebar{
   font-weight: 400;
   color: rgba(255,255,255,.90);
   margin-top: 14px;
+  font-weight: 700;
 }
 .auth-input{
   width: 100%;
