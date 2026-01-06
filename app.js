@@ -8535,7 +8535,7 @@ function renderBrowseCardHTML(it){
       </div>
 
       <div class="browse-entry-plus-wrap" aria-hidden="true">
-        <button class="browse-entry-plus" type="button" aria-label="Add (coming soon)" title="Add (coming soon)">
+        <button class="browse-entry-plus" type="button" aria-label="Add Entry" title="Add Entry">
           <i class="fas fa-plus"></i>
         </button>
       </div>
