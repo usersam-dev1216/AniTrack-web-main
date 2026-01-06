@@ -39,6 +39,20 @@ function getFullPayloadCached(malId, { signal } = {}) {
   return p;
 }
 
+/* -------------------------------------------------------
+   Missing helpers (fix: "malFetchFullById is not defined")
+   ------------------------------------------------------- */
+async function malFetchFullById(malId, { signal } = {}) {
+  // Uses your MAL-middleman worker (cached in D1) — returns full payload JSON
+  return await getFullPayloadCached(malId, { signal });
+}
+
+// Some parts of your code still call this name.
+// Keep it as a safe alias so nothing breaks.
+async function jikanFetchFullById(malId, { signal } = {}) {
+  return await getFullPayloadCached(malId, { signal });
+}
+
 /* --- MAL score hydration for cards (fills missing scores; avoids "" -> 0.00) --- */
 var __malScorePromises = new Map();
 var __malScoreSaveTimer = null;
