@@ -7151,13 +7151,18 @@ deleteAnimeBtn?.addEventListener('click', () => {
     });
 
     // View mode (list sidebar)
-    // View mode (list sidebar) — LOCKED to list-only
-if (lsViewBtn) lsViewBtn.style.display = 'none';
-UI.viewMode = 'list';
-saveUI();
-syncViewModeBtn();
-syncListSidebarViewBtn();
+    lsViewBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
 
+      UI.viewMode = (UI.viewMode === 'list') ? 'card' : 'list';
+      saveUI();
+
+      // sync all view toggles (header + any sidebars)
+      syncViewModeBtn();
+      syncListSidebarViewBtn();
+
+      renderAnimeCards(); // routes automatically if viewMode === 'list'
+    });
   })();
 
 
@@ -9584,18 +9589,11 @@ function initRouting(){
 
 
 
-// View mode (list sidebar)
-lsViewBtn?.addEventListener('click', () => {
-  UI.viewMode = (UI.viewMode === 'list') ? 'card' : 'list';
-  saveUI();
-
-  // sync view buttons that exist
-  syncViewModeBtn();
-  syncListSidebarViewBtn();
-  // syncFloatingSidebarViewBtn(); // <-- REMOVE (not defined in this build)
-
-  renderAnimeCards();
-});
+// View mode toggles are disabled — list-only UI
+if (lsViewBtn) lsViewBtn.style.display = 'none';
+if (typeof viewModeBtn !== 'undefined' && viewModeBtn) viewModeBtn.style.display = 'none';
+UI.viewMode = 'list';
+saveUI();
 
 
 /* --------------------------------- Init ----------------------------------- */
@@ -9605,6 +9603,12 @@ function init() {
   initAuth();
   __initHomeRowNav();
   __initHomeSectionFilters();
+
+  // Hard lock: list mode only
+  UI.viewMode = 'list';
+  saveUI();
+  if (lsViewBtn) lsViewBtn.style.display = 'none';
+  if (typeof viewModeBtn !== 'undefined' && viewModeBtn) viewModeBtn.style.display = 'none';
 
   syncViewModeBtn();
   syncListSidebarViewBtn();
