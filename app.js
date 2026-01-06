@@ -801,37 +801,7 @@ async function deleteUserEntryModal(){
 }
 
 
-async function deleteUserEntryModal(){
-  if (!__ueActiveMalId) return;
 
-  if (!isUserLoggedIn()) {
-    showNotification?.('Login required to remove.');
-    return;
-  }
-
-  const mid = Number(__ueActiveMalId);
-  if (!Number.isFinite(mid) || mid <= 0) return;
-
-  try {
-    // ✅ REAL DELETE from D1
-    const res = await listFetch(`/list/${mid}`, { method: 'DELETE' });
-    const j = await __safeJson(res);
-    if (!res.ok || !j?.ok) throw new Error(j?.error || `delete_failed_${res.status}`);
-
-    CloudListByMalId.delete(mid);
-
-    showNotification?.('Removed from cloud');
-    closeUserEntryModal();
-
-    // refresh list
-    try { await loadListFromCloudAndHydrate(); } catch {}
-    try { renderAnimeCards?.(); } catch {}
-    try { renderHomePage?.(); } catch {}
-  } catch (e) {
-    console.error('deleteUserEntryModal failed:', e);
-    showNotification?.('Remove failed');
-  }
-}
 
 
 
