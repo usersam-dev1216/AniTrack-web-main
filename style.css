@@ -3527,9 +3527,6 @@ padding-bottom: 3px;
 /* =========================
    USER ENTRY MODAL (List Edit) — screenshot layout
    ========================= */
-.user-entry-modal{
-  background: rgba(0,0,0,.55);
-}
 
 .user-entry-modal .ue-stage{
   max-width: 1280px;
