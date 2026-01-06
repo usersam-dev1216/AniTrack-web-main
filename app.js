@@ -330,6 +330,9 @@ function __safeJson(res) {
 const AUTH_API_BASE = 'https://anitrack-user-auth-list.usersam1216.workers.dev';
 const LIST_API_BASE = 'https://anitrack-user-auth-list.usersam1216.workers.dev';
 
+// ✅ IMPORTANT: listFetch() uses this global. If it's missing, Apply/Remove will "do nothing".
+window.ANITRACK_API_BASE = (window.ANITRACK_API_BASE || LIST_API_BASE);
+
 // localStorage removed completely
 const AUTH_USER_KEY = 'AniTrack_AuthUserSnapshot'; // kept only to avoid ref errors elsewhere
 
@@ -2592,19 +2595,25 @@ function __cloudStatusToUI(cloud) {
 
 // -------------------- Worker calls --------------------
 async function listFetch(path, init = {}) {
-  // IMPORTANT: must be your Worker URL (same as auth)
-  const base = (window.ANITRACK_API_BASE || '').replace(/\/+$/, '');
-  if (!base) throw new Error('Missing window.ANITRACK_API_BASE');
+  // ✅ Robust base resolution:
+  // 1) window.ANITRACK_API_BASE (preferred)
+  // 2) LIST_API_BASE fallback (same worker)
+  const base = String(window.ANITRACK_API_BASE || LIST_API_BASE || '').replace(/\/+$/, '');
+  if (!base) throw new Error('Missing API base (set window.ANITRACK_API_BASE or LIST_API_BASE)');
 
   const headers = {
-    'content-type': 'application/json',
     ...(init.headers || {})
   };
+
+  // only set content-type if we actually send a body
+  if (init.body && !headers['content-type'] && !headers['Content-Type']) {
+    headers['content-type'] = 'application/json';
+  }
 
   return fetch(`${base}${path}`, {
     ...init,
     headers,
-    credentials: 'include'
+    credentials: 'include',
   });
 }
 
@@ -3521,7 +3530,7 @@ async function loadHomeEmptyStateRecs() {
     ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
 
     // Spotlight pool = 15 current season + 15 last season + 15 upcoming (ONLY Spotlight)
-    const SPOTLIGHT_COUNT = 25;
+    const SPOTLIGHT_COUNT = 50;
 
     const currentSeason15 = fillToCountUnique(
       bySeason(airingRaw, currentSeasonLabel),
@@ -8102,7 +8111,7 @@ let __browseHomeCache = {
   mostPopular: []
 };
 
-const BROWSE_HOME_LIMIT = 15;
+const BROWSE_HOME_LIMIT = 50;
 const BROWSE_HOME_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 
