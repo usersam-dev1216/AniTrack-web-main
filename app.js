@@ -7465,10 +7465,10 @@ const UI_DEFAULTS = {
     type: true,
     season: true,
     status: true,
-    genres: true,
-    themes: true,
+    genres: false,
+    themes: false,
     episodes: true,
-    duration: true,
+    duration: false,
     malScore: true,
     rating: true
   }
