@@ -6012,14 +6012,52 @@ ease;
   aspect-ratio: 2/3;
   border-radius: 18px;
   overflow: hidden;
-  background: rgba(0,0,0,.25);
+  background: rgba(0,0,0,25);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
   font-size: 4rem;
   flex: 0 0 auto;
+
+  position: relative; /* needed for bottom CTA overlay */
 }
+
+
+/* EntryDetails poster bottom CTA (Add To List / Status) */
+.entrydetails-page .entrydetails-list-cta{
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  height: 44px;
+
+  border-radius: 14px;
+  border: 2px solid rgba(249,168,212,.85);
+  background: rgba(10,10,20,.35);
+  backdrop-filter: blur(6px);
+
+  color: rgba(255,255,255,.92);
+  font-weight: 700;
+  letter-spacing: .2px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 16px 40px rgba(0,0,0,.35);
+}
+
+.entrydetails-page .entrydetails-list-cta:hover{
+  transform: translateY(-1px);
+}
+
+.entrydetails-page .entrydetails-list-cta:active{
+  transform: translateY(0);
+}
+
 
 .entrydetails-page #entryDetailsAnimeImage.detail-poster img {
   width: 100%;

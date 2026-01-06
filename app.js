@@ -7911,12 +7911,51 @@ const valOrNA = (v) => {
 
   setHTML('entryDetailsAnimeFormat', parts.join(' <span class="detail-dot">•</span> '));
 
-  // Poster
+  // Poster (+ Add/Status CTA)
   const imgBox = document.getElementById('entryDetailsAnimeImage');
   if (imgBox) {
-    imgBox.innerHTML = a.image
+    const malId = (() => {
+      const mid = Number(a?.malId || a?.mal_id || 0);
+      if (mid) return mid;
+      const m = String(a?.id || '').match(/mal:(\d+)/i);
+      return m ? Number(m[1]) : 0;
+    })();
+
+    const cloudRow = malId ? (CloudListByMalId?.get?.(malId) || null) : null;
+    const inList = !!cloudRow;
+
+    // 조건:
+    // - not in list => "Add To List"
+    // - already in list => show current status (fallback "Status")
+    const btnText = inList
+      ? (__statusApiToUi?.(cloudRow?.status) || 'Status')
+      : 'Add To List';
+
+    const posterHTML = a.image
       ? `<img src="${esc(a.image)}" alt="${esc(a.title || 'Anime')}">`
       : '<i class="fas fa-image"></i>';
+
+    imgBox.innerHTML = `
+      ${posterHTML}
+      <button
+        class="entrydetails-list-cta"
+        id="entryDetailsListCta"
+        type="button"
+        ${malId ? `data-mal-id="${malId}"` : ''}
+      >${esc(btnText)}</button>
+    `;
+
+    const btn = imgBox.querySelector('#entryDetailsListCta');
+    if (btn && !btn.__wired) {
+      btn.__wired = true;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const mid = Number(btn.dataset.malId || malId || 0);
+        if (!mid) return;
+        openUserEntryModalFromMalId?.(mid);
+      });
+    }
   }
 
   // Synopsis
