@@ -2608,77 +2608,7 @@ async function listFetch(path, init = {}) {
   });
 }
 
-// -------------------- Modal -> D1 binding --------------------
-async function saveUserEntryModal() {
-  // expects: __ueActiveMalId set when opening modal
-  const malId = Number(__ueActiveMalId || 0);
-  if (!malId) return;
 
-  // grab modal fields (IDs must match what your modal already uses)
-  const statusEl = document.getElementById('ueStatus');
-  const ratingEl = document.getElementById('ueRating');
-  const epsEl    = document.getElementById('ueEpisodes');
-  const notesEl  = document.getElementById('ueNotes');
-  const favEl    = document.getElementById('ueFavorite');
-  const listEl   = document.getElementById('ueCustomList');
-
-  const payload = {
-    malId,
-    status: __uiStatusToCloud(statusEl?.value),
-    personalRating: (ratingEl?.value === '' ? null : Number(ratingEl?.value)),
-    episodeProgress: Number(epsEl?.value || 0),
-    customNotes: (notesEl?.value || '').trim() || null,
-    isFavorite: !!favEl?.checked,
-    customList: (listEl?.value || '').trim() || null
-  };
-
-  const res = await listFetch('/list/upsert', {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  });
-  const data = await res.json().catch(() => null);
-
-  if (!res.ok || !data?.ok) {
-    console.error('upsert failed', res.status, data);
-    alert('Save failed.');
-    return;
-  }
-
-  // Update in-memory cloud map so UI filters refresh immediately
-  const item = data.item || {};
-  __cloudListByMalId.set(String(malId), item);
-
-  // Also reflect status into your in-memory entry (so list filters work instantly)
-  const uiStatus = __cloudStatusToUI(item.status);
-  const entry = (animeList || []).find(a => Number(__getMalIdFromEntry(a)) === malId);
-  if (entry) entry.status = uiStatus;
-
-  closeUserEntryModal?.();
-  renderAnimeCards?.();
-}
-
-async function deleteUserEntryModal() {
-  const malId = Number(__ueActiveMalId || 0);
-  if (!malId) return;
-
-  const res = await listFetch(`/list/${malId}`, { method: 'DELETE' });
-  const data = await res.json().catch(() => null);
-
-  if (!res.ok || !data?.ok) {
-    console.error('delete failed', res.status, data);
-    alert('Delete failed.');
-    return;
-  }
-
-  __cloudListByMalId.delete(String(malId));
-
-  // remove entry from UI list (or you can keep it and just mark as not tracked)
-  const idx = (animeList || []).findIndex(a => Number(__getMalIdFromEntry(a)) === malId);
-  if (idx !== -1) animeList.splice(idx, 1);
-
-  closeUserEntryModal?.();
-  renderAnimeCards?.();
-}
 
 
 /* ----------------------- CLOUD LIST (D1 via unified worker) ----------------------- */
@@ -2768,13 +2698,7 @@ function __statusApiToUi(v) {
   return s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// Cache used for "+" modal prefill
-const CloudListByMalId = new Map();
 
-// Load full list rows from D1 and hydrate in-memory animeList.
-// - NO localStorage
-// - #list renders from animeList (your design unchanged)
-// - "+" modal prefill uses CloudListByMalId
 async function loadListFromCloudAndHydrate() {
   if (!isUserLoggedIn?.()) return;
 
