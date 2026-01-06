@@ -7457,7 +7457,7 @@ detailMenuBtn?.addEventListener('click', (e) => {
 /* ------------------------------ UI Settings ------------------------------ */
 const UI_KEY = 'aniTrack.ui';
 const UI_DEFAULTS = {
-  viewMode: 'card', // 'card' | 'list'
+  viewMode: 'list', // locked: 'list' only (card mode disabled)
   cardsPerRow: 10,
   listColumns: {
     picture: true,
