@@ -3768,9 +3768,13 @@ async function loadHomeEmptyStateRecs() {
       spotlightPool.push(a);
     });
 
-    __homeSpotlightPool = spotlightPool;
-    __spotlightIds = __homeSpotlightPool.map(a => String(a.id));
-    __spotlightIndex = 0;
+  __homeSpotlightPool = spotlightPool;
+__spotlightIds = __homeSpotlightPool.map(a => String(a.id));
+__spotlightIndex = 0;
+
+// Pull entry_cover_panel from D1 and merge into the pool
+await __hydrateSpotlightHeroCovers();
+
 
     // Fill all 5 home rows
     fillHomeRow(homeTopAiringRow, airing10, 1000);
@@ -3994,7 +3998,13 @@ function updateSpotlightUI({ watching = [], topAiring = [], upcoming = [] } = {}
 
   const id = __spotlightIds[__spotlightIndex];
   const pool = (__homeSpotlightPool && __homeSpotlightPool.length) ? __homeSpotlightPool : (animeList || []);
-const a = pool.find(x => String(x.id) === String(id));
+const targetId = String(id ?? '').replace(/^mal:/, '');
+const a = pool.find(x => {
+  const mx = getNumericMalIdFromEntry(x);
+  if (mx && String(mx) === targetId) return true;
+  // fallback: still allow exact id match
+  return String(x?.id ?? '') === String(id ?? '');
+});
   if (!a) return;
 
 
@@ -4174,6 +4184,59 @@ if (!descIsSynopsis && spotlightDescEl) {
     try { __spotlightAutoStart(); } catch (_) {}
   }
 }
+
+
+// ---- Spotlight hero cover hydration (entry_cover_panel from D1) ----
+let __spotlightHeroHydrating = null;
+
+function __applyHeroMapToPool(pool, heroMap) {
+  if (!Array.isArray(pool) || !heroMap) return;
+  pool.forEach(a => {
+    const mid = getNumericMalIdFromEntry(a);
+    if (!mid) return;
+    const hero = heroMap.get(String(mid));
+    if (hero && !String(a?.entry_cover_panel || '').trim()) {
+      a.entry_cover_panel = hero;
+    }
+  });
+}
+
+function __fetchSpotlightHeroMapFromD1() {
+  // one-flight so we don’t spam the API
+  if (__spotlightHeroHydrating) return __spotlightHeroHydrating;
+
+  __spotlightHeroHydrating = fetch(malApiUrl('/api/spotlight?limit=60'))
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => {
+      const items = Array.isArray(j?.items) ? j.items : [];
+      const map = new Map();
+
+      items.forEach(it => {
+        const mid = String(it?.mal_id ?? it?.malId ?? '').trim();
+        const hero = String(it?.entry_cover_panel ?? '').trim();
+        if (mid && hero) map.set(mid, hero);
+      });
+
+      return map;
+    })
+    .catch(() => new Map())
+    .finally(() => {
+      // allow refresh later if you want; keep it cached per page-load by default
+      // comment this out if you want it to refetch every time:
+      // __spotlightHeroHydrating = null;
+    });
+
+  return __spotlightHeroHydrating;
+}
+
+async function __hydrateSpotlightHeroCovers() {
+  const heroMap = await __fetchSpotlightHeroMapFromD1();
+
+  // Apply to BOTH: home spotlight pool (empty-state) and user list (normal-state)
+  __applyHeroMapToPool(__homeSpotlightPool, heroMap);
+  __applyHeroMapToPool(animeList, heroMap);
+}
+
 
 
 /* --------------------- Title overflow (simple marquee) -------------------- */
