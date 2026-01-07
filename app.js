@@ -7956,7 +7956,7 @@ if (listBox) {
   // Conditions:
   // - not in list => "Add To List"
   // - already added => "Status"
-  listBox.textContent = inList ? 'Status' : 'Add To List';
+  listBox.textContent = inList ? 'Check Status' : '+ Add To My List';
 
   if (!listBox.__wired) {
     listBox.__wired = true;

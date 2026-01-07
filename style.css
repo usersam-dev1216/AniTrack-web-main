@@ -1517,7 +1517,8 @@ color: var(--text-secondary);
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
+  align-items: center;
 }
 
 /* The button BELOW the poster (not inside it) */
@@ -1525,12 +1526,10 @@ color: var(--text-secondary);
   height: 46px;
   width: 100%;
 
-  border-radius: 14px;
+  border-radius: 74px;
   border: 2px solid rgba(249,168,212,.85);
-  background: rgba(10,10,20,.35);
-  backdrop-filter: blur(6px);
-
-  color: rgba(255,255,255,.92);
+  background: transparent;
+  color: white;
   font-weight: 800;
   letter-spacing: .2px;
 
@@ -1541,7 +1540,7 @@ color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
 
-  box-shadow: 0 16px 40px rgba(0,0,0,.35);
+  
 }
 
 .entrydetails-page .entrydetails-listbox:hover{
@@ -3572,7 +3571,7 @@ padding-bottom: 3px;
    ========================= */
 
 .user-entry-modal .ue-stage{
-  max-width: 1280px;
+  max-width: 1080px;
   width: min(1280px, calc(100vw - 64px));
   padding: 34px 34px 26px;
   border-radius: 22px;
@@ -3595,16 +3594,17 @@ padding-bottom: 3px;
 }
 
 .user-entry-modal .ue-title{
-  margin: 6px 0 22px;
+  margin: 0px 0 32px;
   font-size: x-large;
   font-weight: 900;
   color: #ffbdf0;
   letter-spacing: .2px;
+  justify-self: center;
 }
 
 .user-entry-modal .ue-layout{
   display: grid;
-  grid-template-columns: 240px 500px 1fr;
+  grid-template-columns: 210px 400px 1fr;
   gap: 36px;
   align-items: start;
 }
@@ -3649,6 +3649,7 @@ padding-bottom: 3px;
   font-size: 1.05rem;
   color: #fff;
   letter-spacing: .15px;
+  font-weight: 500;
 }
 
 .user-entry-modal .ue-control{
@@ -3681,7 +3682,7 @@ padding-bottom: 3px;
   display: inline-flex;
   align-items: center;
   gap: 14px;
-  margin-top: 44px;
+  margin-top: 20px;
   color: #fff;
   font-size: 1.15rem;
 }
@@ -3710,7 +3711,7 @@ padding-bottom: 3px;
 }
 
 .user-entry-modal .ue-notes-box{
-  min-height: 320px;
+  min-height: 270px;
   height: 100%;
   resize: none;
   padding: 14px 14px;
@@ -5376,7 +5377,7 @@ border: 1px solid rgba(167, 139, 250, .12);
   list-style: none;
 
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px 18px;
 
   /* IMPORTANT: kill scroll behavior */
