@@ -1081,7 +1081,7 @@ color: var(--text-secondary);
 
 
 
-.spotlight-nav {
+.spotlight-nav{
   position: absolute;
   right: 22px;
   top: 50%;
@@ -1089,7 +1089,18 @@ color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   gap: 10px;
-  z-index: 2;
+  z-index: 4;
+
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+/* show on hover (desktop) + keyboard focus */
+.spotlight:hover .spotlight-nav,
+.spotlight:focus-within .spotlight-nav{
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .spotlight-nav-btn {

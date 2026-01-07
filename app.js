@@ -3496,6 +3496,52 @@ function __initHomeSectionFilters(){
 let __spotlightIds = [];
 let __spotlightIndex = 0;
 
+// Spotlight autoplay (safe)
+const __SPOTLIGHT_AUTO_MS = 8000;
+let __spotlightAutoTimer = null;
+
+function __spotlightAutoStop(){
+  if (__spotlightAutoTimer) {
+    clearInterval(__spotlightAutoTimer);
+    __spotlightAutoTimer = null;
+  }
+}
+
+function __spotlightAutoStart(){
+  __spotlightAutoStop();
+
+  // Only run on #home
+  const route = (location.hash || '#home').toLowerCase().split('?')[0];
+  if (route !== '#home') return;
+
+  // Must have spotlight + data
+  if (!homeSpotlight || !Array.isArray(__spotlightIds) || __spotlightIds.length < 2) return;
+
+  // Avoid running while tab hidden
+  if (document.hidden) return;
+
+  __spotlightAutoTimer = setInterval(() => {
+    const r = (location.hash || '#home').toLowerCase().split('?')[0];
+    if (r !== '#home') return __spotlightAutoStop();
+    if (document.hidden) return;
+
+    if (!homeSpotlight || !Array.isArray(__spotlightIds) || __spotlightIds.length < 2) return;
+
+    __spotlightIndex = (__spotlightIndex + 1) % __spotlightIds.length;
+    try { updateSpotlightUI({}, { direction: 'left' }); } catch (_) {}
+  }, __SPOTLIGHT_AUTO_MS);
+}
+
+function __spotlightAutoRestart(){
+  __spotlightAutoStart();
+}
+
+// pause/resume on tab visibility
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) __spotlightAutoStop();
+  else __spotlightAutoStart();
+});
+
 // Spotlight synopsis cache (so home spotlight can show real synopsis even when list endpoints don't include it)
 const __spotlightSynopsisCache = new Map(); // malId -> string OR Promise<string>
 
@@ -3878,15 +3924,67 @@ function updateSpotlightUI({ watching = [], topAiring = [], upcoming = [] } = {}
   // swipe animation (direction: 'left' | 'right')
   const dir = opts?.direction;
   if (dir === 'left' || dir === 'right') {
-    // wire cleanup once
+    // wire cleanup + touch swipe once
     if (!homeSpotlight.__spotlightSwipeWired) {
       homeSpotlight.__spotlightSwipeWired = true;
+
+      // cleanup swipe classes after animation
       homeSpotlight.addEventListener('animationend', (e) => {
         if (e.target && e.target.classList && e.target.classList.contains('spotlight-inner')) {
           homeSpotlight.classList.remove('spotlight-swipe-left', 'spotlight-swipe-right');
         }
       });
+
+      // --- Mobile swipe: right/left to change spotlight entry ---
+      let sx = 0, sy = 0, dx = 0, dy = 0, tracking = false;
+
+      const THRESH = 42;   // px
+      const V_LOCK = 18;   // extra tolerance before we treat it as vertical scroll
+
+      homeSpotlight.addEventListener('touchstart', (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
+        const t = e.touches[0];
+        sx = t.clientX;
+        sy = t.clientY;
+        dx = 0;
+        dy = 0;
+        tracking = true;
+      }, { passive: true });
+
+      homeSpotlight.addEventListener('touchmove', (e) => {
+        if (!tracking || !e.touches || e.touches.length !== 1) return;
+        const t = e.touches[0];
+        dx = t.clientX - sx;
+        dy = t.clientY - sy;
+
+        // If it's mostly horizontal, prevent page scroll
+        if (Math.abs(dx) > Math.abs(dy) + V_LOCK) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      homeSpotlight.addEventListener('touchend', () => {
+        if (!tracking) return;
+        tracking = false;
+
+        if (!__spotlightIds || __spotlightIds.length < 2) return;
+
+        // swipe left => next
+        if (dx <= -THRESH) {
+          __spotlightIndex = (__spotlightIndex + 1) % __spotlightIds.length;
+          updateSpotlightUI(undefined, { direction: 'left' });
+          return;
+        }
+
+        // swipe right => prev
+        if (dx >= THRESH) {
+          __spotlightIndex = (__spotlightIndex - 1 + __spotlightIds.length) % __spotlightIds.length;
+          updateSpotlightUI(undefined, { direction: 'right' });
+          return;
+        }
+      }, { passive: true });
     }
+
 
     homeSpotlight.classList.remove('spotlight-swipe-left', 'spotlight-swipe-right');
     // force restart animation
@@ -4048,6 +4146,11 @@ if (!descIsSynopsis && spotlightDescEl) {
 
   // keep a data-id on the spotlight (handy for debugging / css hooks)
   homeSpotlight.dataset.id = String(a.id);
+
+  // ✅ start autoplay as soon as Spotlight is actually rendered (after IDs exist)
+  if (typeof __spotlightAutoStart === 'function') {
+    try { __spotlightAutoStart(); } catch (_) {}
+  }
 }
 
 
@@ -9538,6 +9641,7 @@ spotlightNextBtn?.addEventListener('click', (e) => {
   if (!__spotlightIds?.length) return;
   __spotlightIndex = (__spotlightIndex + 1) % __spotlightIds.length;
   updateSpotlightUI({}, { direction: 'left' });
+  __spotlightAutoRestart();
 });
 
 spotlightPrevBtn?.addEventListener('click', (e) => {
@@ -9545,6 +9649,7 @@ spotlightPrevBtn?.addEventListener('click', (e) => {
   if (!__spotlightIds?.length) return;
   __spotlightIndex = (__spotlightIndex - 1 + __spotlightIds.length) % __spotlightIds.length;
   updateSpotlightUI({}, { direction: 'right' });
+  __spotlightAutoRestart();
 });
 
 
@@ -9646,29 +9751,39 @@ function applyRoute(){
   // render correct view content on navigation
   if (isHome) {
     renderHomePage();
-} else if (isList) {
-  // If logged in: load list MAL IDs from List Worker, then render
-  (async () => {
-    try {
-      if (isUserLoggedIn?.()) {
-        await loadListFromCloudAndHydrate();
-      }
-    } catch (e) {
-      console.warn('List cloud load failed:', e);
-      // fallback: keep local list
-    }
-    renderAnimeCards(); // respects card/list mode
-  })();
-} else if (isBrowse) {
+    __spotlightAutoStart();
 
-    renderBrowsePage();
-  } else if (isSettings) {
-    renderSettingsPage();
-  } else if (isStatistics) {
-    renderStatisticsPage();
-  } else if (isEntryDetails) {
-    renderEntryDetailsPage();
+  } else {
+    __spotlightAutoStop();
+
+    if (isList) {
+      // If logged in: load list MAL IDs from List Worker, then render
+      (async () => {
+        try {
+          if (isUserLoggedIn?.()) {
+            await loadListFromCloudAndHydrate();
+          }
+        } catch (e) {
+          console.warn('List cloud load failed:', e);
+          // fallback: keep local list
+        }
+        renderAnimeCards(); // respects card/list mode
+      })();
+
+    } else if (isBrowse) {
+      renderBrowsePage();
+
+    } else if (isSettings) {
+      renderSettingsPage();
+
+    } else if (isStatistics) {
+      renderStatisticsPage();
+
+    } else if (isEntryDetails) {
+      renderEntryDetailsPage();
+    }
   }
+
   // account/profile/auth are UI-only for now (no JS yet)
 }
 
