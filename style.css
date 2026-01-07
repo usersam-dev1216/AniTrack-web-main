@@ -921,7 +921,7 @@ color: var(--text-secondary);
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(0,0,0,.95) 0%, rgba(0,0,0,.88) 46%, rgba(0,0,0,.52) 100%);
+  background: linear-gradient(90deg, rgba(0,0,0,.95) 0%, rgba(0,0,0,.75) 46%, rgba(0,0,0,.02) 100%);
   z-index: 1;
   pointer-events: none;
 }
