@@ -835,7 +835,7 @@ color: var(--text-secondary);
 .spotlight{
   position: relative;
   height: 550px;
-  max-height: 550px;
+  max-height: 480px;
 
   border-radius: var(--app-radius);
 
