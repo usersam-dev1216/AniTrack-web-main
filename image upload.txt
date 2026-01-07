@@ -1,0 +1,37 @@
+(async () => {
+  const API_BASE = "https://anitrack-library.usersam1216.workers.dev";
+  const ADMIN_TOKEN = ""; // optional (leave "" if not used)
+
+  const malIdRaw = prompt("enter mal id:");
+  if (!malIdRaw) return console.log("Cancelled (no MAL ID).");
+
+  const MAL_ID = Number(String(malIdRaw).trim());
+  if (!Number.isFinite(MAL_ID) || MAL_ID <= 0) {
+    return alert("Invalid MAL ID");
+  }
+
+  const IMAGE_URL = String(prompt("enter image url:") || "").trim();
+  if (!IMAGE_URL) return console.log("Cancelled (no image url).");
+
+  const res = await fetch(`${API_BASE}/api/admin/entry-cover-panel`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(ADMIN_TOKEN ? { "X-Admin-Token": ADMIN_TOKEN } : {}),
+    },
+    body: JSON.stringify({
+      mal_id: MAL_ID,
+      image_url: IMAGE_URL,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || data?.ok === false) {
+    console.error("FAILED:", res.status, data);
+    return alert(`Update failed (${res.status}) — check console`);
+  }
+
+  console.log("Saved ✅", data);
+  alert("Saved ✅");
+})();

@@ -3926,70 +3926,71 @@ function updateSpotlightUI({ watching = [], topAiring = [], upcoming = [] } = {}
   if (!homeSpotlight || !__spotlightIds.length) return;
 
   // swipe animation (direction: 'left' | 'right')
+
+  // wire swipe cleanup + touch gestures once (must NOT depend on autoplay)
+  if (!homeSpotlight.__spotlightSwipeWired) {
+    homeSpotlight.__spotlightSwipeWired = true;
+
+    // cleanup swipe classes after animation
+    homeSpotlight.addEventListener('animationend', (e) => {
+      if (e.target && e.target.classList && e.target.classList.contains('spotlight-inner')) {
+        homeSpotlight.classList.remove('spotlight-swipe-left', 'spotlight-swipe-right');
+      }
+    });
+
+    // --- Mobile swipe: right/left to change spotlight entry ---
+    let sx = 0, sy = 0, dx = 0, dy = 0, tracking = false;
+
+    const THRESH = 42;   // px
+    const V_LOCK = 18;   // extra tolerance before we treat it as vertical scroll
+
+    homeSpotlight.addEventListener('touchstart', (e) => {
+      if (!e.touches || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      sx = t.clientX;
+      sy = t.clientY;
+      dx = 0;
+      dy = 0;
+      tracking = true;
+    }, { passive: true });
+
+    homeSpotlight.addEventListener('touchmove', (e) => {
+      if (!tracking || !e.touches || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      dx = t.clientX - sx;
+      dy = t.clientY - sy;
+
+      // If it's mostly horizontal, prevent page scrolling
+      if (Math.abs(dx) > Math.abs(dy) + V_LOCK) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    homeSpotlight.addEventListener('touchend', () => {
+      if (!tracking) return;
+      tracking = false;
+
+      if (!__spotlightIds || __spotlightIds.length < 2) return;
+
+      // swipe left => next
+      if (dx <= -THRESH) {
+        __spotlightIndex = (__spotlightIndex + 1) % __spotlightIds.length;
+        updateSpotlightUI(undefined, { direction: 'left' });
+        return;
+      }
+
+      // swipe right => prev
+      if (dx >= THRESH) {
+        __spotlightIndex = (__spotlightIndex - 1 + __spotlightIds.length) % __spotlightIds.length;
+        updateSpotlightUI(undefined, { direction: 'right' });
+        return;
+      }
+    }, { passive: true });
+  }
+
+  // swipe animation (direction: 'left' | 'right')
   const dir = opts?.direction;
   if (dir === 'left' || dir === 'right') {
-    // wire cleanup + touch swipe once
-    if (!homeSpotlight.__spotlightSwipeWired) {
-      homeSpotlight.__spotlightSwipeWired = true;
-
-      // cleanup swipe classes after animation
-      homeSpotlight.addEventListener('animationend', (e) => {
-        if (e.target && e.target.classList && e.target.classList.contains('spotlight-inner')) {
-          homeSpotlight.classList.remove('spotlight-swipe-left', 'spotlight-swipe-right');
-        }
-      });
-
-      // --- Mobile swipe: right/left to change spotlight entry ---
-      let sx = 0, sy = 0, dx = 0, dy = 0, tracking = false;
-
-      const THRESH = 42;   // px
-      const V_LOCK = 18;   // extra tolerance before we treat it as vertical scroll
-
-      homeSpotlight.addEventListener('touchstart', (e) => {
-        if (!e.touches || e.touches.length !== 1) return;
-        const t = e.touches[0];
-        sx = t.clientX;
-        sy = t.clientY;
-        dx = 0;
-        dy = 0;
-        tracking = true;
-      }, { passive: true });
-
-      homeSpotlight.addEventListener('touchmove', (e) => {
-        if (!tracking || !e.touches || e.touches.length !== 1) return;
-        const t = e.touches[0];
-        dx = t.clientX - sx;
-        dy = t.clientY - sy;
-
-        // If it's mostly horizontal, prevent page scroll
-        if (Math.abs(dx) > Math.abs(dy) + V_LOCK) {
-          e.preventDefault();
-        }
-      }, { passive: false });
-
-      homeSpotlight.addEventListener('touchend', () => {
-        if (!tracking) return;
-        tracking = false;
-
-        if (!__spotlightIds || __spotlightIds.length < 2) return;
-
-        // swipe left => next
-        if (dx <= -THRESH) {
-          __spotlightIndex = (__spotlightIndex + 1) % __spotlightIds.length;
-          updateSpotlightUI(undefined, { direction: 'left' });
-          return;
-        }
-
-        // swipe right => prev
-        if (dx >= THRESH) {
-          __spotlightIndex = (__spotlightIndex - 1 + __spotlightIds.length) % __spotlightIds.length;
-          updateSpotlightUI(undefined, { direction: 'right' });
-          return;
-        }
-      }, { passive: true });
-    }
-
-
     homeSpotlight.classList.remove('spotlight-swipe-left', 'spotlight-swipe-right');
     // force restart animation
     void homeSpotlight.offsetWidth;
@@ -3997,6 +3998,9 @@ function updateSpotlightUI({ watching = [], topAiring = [], upcoming = [] } = {}
   }
 
   const id = __spotlightIds[__spotlightIndex];
+
+
+
   const pool = (__homeSpotlightPool && __homeSpotlightPool.length) ? __homeSpotlightPool : (animeList || []);
 const targetId = String(id ?? '').replace(/^mal:/, '');
 const a = pool.find(x => {
