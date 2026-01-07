@@ -3998,26 +3998,48 @@ const a = pool.find(x => String(x.id) === String(id));
   if (!a) return;
 
 
-  // DefaultBackground ONLY: cover image is always the background
-  const bg = (a.image || '');
+  // Spotlight background:
+  // - If entry_cover_panel exists => use it as the full-width hero image (NO blur, NO cover overlay)
+  // - Else => fall back to default design (blurred bg + cover overlay), and DO NOT skip the entry
+  const hero =
+    String(
+      a?.entry_cover_panel ??
+      a?.entryCoverPanel ??
+      a?.entry_cover ??
+      ''
+    ).trim();
+
+  const cover = String(a?.image || '').trim();
+
+  const bg = hero || cover;
   homeSpotlight.style.backgroundImage = bg ? `url("${bg}")` : '';
 
   homeSpotlight.style.backgroundSize = 'cover';
   homeSpotlight.style.backgroundPosition = 'center';
   homeSpotlight.style.backgroundRepeat = 'no-repeat';
 
-  // ALWAYS blur, no matter what
-  homeSpotlight.setAttribute('data-bg-blur', '1');
+  if (hero) {
+    // Hero image mode (your new plan)
+    homeSpotlight.removeAttribute('data-bg-blur');
 
-  // ALWAYS show cover overlay on top (if cover exists)
-  if (spotlightCoverOverlay && spotlightCoverImg && a.image) {
-    spotlightCoverOverlay.hidden = false;
-    spotlightCoverImg.src = String(a.image);
-    spotlightCoverImg.alt = a.title || 'Cover';
-  } else if (spotlightCoverOverlay && spotlightCoverImg) {
-    spotlightCoverOverlay.hidden = true;
-    spotlightCoverImg.removeAttribute('src');
-    spotlightCoverImg.alt = '';
+    if (spotlightCoverOverlay && spotlightCoverImg) {
+      spotlightCoverOverlay.hidden = true;
+      spotlightCoverImg.removeAttribute('src');
+      spotlightCoverImg.alt = '';
+    }
+  } else {
+    // Default mode (existing look)
+    homeSpotlight.setAttribute('data-bg-blur', '1');
+
+    if (spotlightCoverOverlay && spotlightCoverImg && cover) {
+      spotlightCoverOverlay.hidden = false;
+      spotlightCoverImg.src = cover;
+      spotlightCoverImg.alt = a.title || 'Cover';
+    } else if (spotlightCoverOverlay && spotlightCoverImg) {
+      spotlightCoverOverlay.hidden = true;
+      spotlightCoverImg.removeAttribute('src');
+      spotlightCoverImg.alt = '';
+    }
   }
 
 
