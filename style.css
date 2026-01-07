@@ -3575,7 +3575,7 @@ padding-bottom: 3px;
   width: min(1280px, calc(100vw - 64px));
   padding: 34px 34px 26px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, .05);
+  background: transparent;
   position: relative;
   overflow: hidden;
 }
