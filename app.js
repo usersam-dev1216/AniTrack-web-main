@@ -3774,7 +3774,7 @@ __spotlightIndex = 0;
 const COUNT_CURRENT_SEASON = 34;
 const COUNT_TOP_ALL_TIME = 33;
 const COUNT_UPCOMING = 33;
-const SPOTLIGHT_CAP = 1000;
+const SPOTLIGHT_CAP = 3000;
 
 // ---- helpers ----
 function _shuffle(arr){
