@@ -3737,43 +3737,150 @@ async function loadHomeEmptyStateRecs() {
       sortByScoreDesc(allRaw)
     ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
 
-    // Spotlight pool = 15 current season + 15 last season + 15 upcoming (ONLY Spotlight)
-    const SPOTLIGHT_COUNT = 50;
 
-    const currentSeason15 = fillToCountUnique(
-      bySeason(airingRaw, currentSeasonLabel),
-      airingRaw,
-      SPOTLIGHT_COUNT
-    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+    // ---- MANUAL SPOTLIGHT THREAD (ALWAYS FETCHED) ----
+// You can put ANY MAL IDs here
+const MANUAL_THREAD_IDS = [
+  30015,
+  54744,
+  34984
+];
 
-    const lastSeason15 = fillToCountUnique(
-      sortByScoreDesc(bySeason(allRaw, lastSeasonLabel)),
-      sortByScoreDesc(allRaw),
-      SPOTLIGHT_COUNT
-    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+// Fetch entries directly from API (no dependency on pools)
+async function fetchManualThreadEntries(ids){
+  const out = [];
+  for (const id of ids) {
+    try {
+      const res = await fetch(`${window.ANITRACK_API_BASE}/api/anime/${id}/full`);
+      if (!res.ok) continue;
 
-    const upcomingSeason15 = fillToCountUnique(
-      bySeason(upcomingRaw, nextSeasonLabel),
-      upcomingRaw,
-      SPOTLIGHT_COUNT
-    ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+      const data = await res.json();
+      const payload = data?.details || data?.data || null;
+      if (!payload) continue;
 
-    // Merge + de-dupe (safety)
-    const spotlightPool = [];
-    const spotlightSeen = new Set();
-    [...currentSeason15, ...lastSeason15, ...upcomingSeason15].forEach(a => {
-      const id = String(a?.id ?? '');
-      if (!id || spotlightSeen.has(id)) return;
-      spotlightSeen.add(id);
-      spotlightPool.push(a);
-    });
+      const entry = malLikeToHomeEntry(payload);
+      if (entry) out.push(entry);
+    } catch (e) {
+      console.warn("Manual thread fetch failed:", id, e);
+    }
+  }
+  return out;
+}
 
-  __homeSpotlightPool = spotlightPool;
+
+
+// ---- HARDCODED SPOTLIGHT (FORCED REBUILD) ----
+// Window: last year / this year / next year
+// Fixed counts:
+// - Current season: 30
+// - Last season: 0
+// - Next season: 15
+// - Top rated (within window): 10
+
+// FORCE rebuild even if previous run cached values
+__homeSpotlightPool = [];
+__spotlightIds = [];
+__spotlightIndex = 0;
+
+// ---- year window ----
+const _now = new Date();
+const _thisYear = _now.getFullYear();
+const _lastYear = _thisYear - 1;
+const _nextYear = _thisYear + 1;
+
+function _getYear(a){
+  const y1 = Number(a?.year);
+  if (Number.isFinite(y1) && y1 > 0) return y1;
+
+  const sd = String(a?.start_date || "").trim();
+  if (sd && sd.length >= 4) {
+    const y2 = Number(sd.slice(0, 4));
+    if (Number.isFinite(y2) && y2 > 0) return y2;
+  }
+  return null;
+}
+
+function _inWindow(a){
+  const y = _getYear(a);
+  return y === _lastYear || y === _thisYear || y === _nextYear;
+}
+
+// hardcoded caps
+const COUNT_CURRENT = 30;
+const COUNT_LAST = 15;
+const COUNT_NEXT = 15;
+const COUNT_TOP = 10;
+
+const SPOTLIGHT_COUNT = 100;
+
+// filter raw pools first (so nothing old leaks in)
+const airingWindow = (airingRaw || []).filter(_inWindow);
+const allRawWindow = (allRaw || []).filter(_inWindow);
+const upcomingWindow = (upcomingRaw || []).filter(_inWindow);
+
+// 1) Current season (hardcoded 30)
+const currentSeasonList = fillToCountUnique(
+  bySeason(airingWindow, currentSeasonLabel),
+  airingWindow,
+  COUNT_CURRENT
+).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+// 2) Last season (hardcoded 0)
+const lastSeasonList = COUNT_LAST > 0
+  ? fillToCountUnique(
+      sortByScoreDesc(bySeason(allRawWindow, lastSeasonLabel)),
+      sortByScoreDesc(allRawWindow),
+      COUNT_LAST
+    ).map(x => malLikeToHomeEntry(x)).filter(Boolean)
+  : [];
+
+// 3) Upcoming next season (hardcoded 15)
+const nextSeasonList = fillToCountUnique(
+  bySeason(upcomingWindow, nextSeasonLabel),
+  upcomingWindow,
+  COUNT_NEXT
+).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+
+// 4) Top rated within window (hardcoded 10)
+const topAllTime = sortByScoreDesc(allRawWindow)
+  .slice(0, COUNT_TOP)
+  .map(x => malLikeToHomeEntry(x))
+  .filter(Boolean);
+
+/// ---- Build spotlight (MANUAL THREAD FIRST) ----
+const spotlightPool = [];
+const spotlightSeen = new Set();
+
+// 0) Manual thread (ALWAYS present)
+const manualThreadList = await fetchManualThreadEntries(MANUAL_THREAD_IDS);
+manualThreadList.forEach(a => {
+  const id = String(a?.id ?? '');
+  if (!id || spotlightSeen.has(id)) return;
+  spotlightSeen.add(id);
+  spotlightPool.push(a);
+});
+
+// 1+) Rest of spotlight (seasonal logic)
+[currentSeasonList, lastSeasonList, nextSeasonList].forEach(list => {
+  list.forEach(a => {
+    const id = String(a?.id ?? '');
+    if (!id || spotlightSeen.has(id)) return;
+    spotlightSeen.add(id);
+    spotlightPool.push(a);
+  });
+});
+
+
+__homeSpotlightPool = spotlightPool.slice(0, SPOTLIGHT_COUNT);
 __spotlightIds = __homeSpotlightPool.map(a => String(a.id));
 __spotlightIndex = 0;
 
 // Pull entry_cover_panel from D1 and merge into the pool
 await __hydrateSpotlightHeroCovers();
+
+
+
+
 
 
     // Fill all 5 home rows
