@@ -3769,114 +3769,128 @@ async function fetchManualThreadEntries(ids){
 
 
 
-// ---- HARDCODED SPOTLIGHT (FORCED REBUILD) ----
-// Window: last year / this year / next year
-// Fixed counts:
-// - Current season: 30
-// - Last season: 0
-// - Next season: 15
-// - Top rated (within window): 10
+// ==================== SPOTLIGHT (FULL RECODE) ====================
 
-// FORCE rebuild even if previous run cached values
+// FORCE rebuild every time
 __homeSpotlightPool = [];
 __spotlightIds = [];
 __spotlightIndex = 0;
 
-// ---- year window ----
-const _now = new Date();
-const _thisYear = _now.getFullYear();
-const _lastYear = _thisYear - 1;
-const _nextYear = _thisYear + 1;
+// ---- CONFIG (EDIT HERE ONLY) ----
+const COUNT_CURRENT_SEASON = 30;
+const COUNT_TOP_ALL_TIME = 20;
+const COUNT_UPCOMING = 30;
+const SPOTLIGHT_CAP = 10;
 
-function _getYear(a){
-  const y1 = Number(a?.year);
-  if (Number.isFinite(y1) && y1 > 0) return y1;
-
-  const sd = String(a?.start_date || "").trim();
-  if (sd && sd.length >= 4) {
-    const y2 = Number(sd.slice(0, 4));
-    if (Number.isFinite(y2) && y2 > 0) return y2;
+// ---- helpers ----
+function _shuffle(arr){
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  return null;
+  return a;
 }
 
-function _inWindow(a){
-  const y = _getYear(a);
-  return y === _lastYear || y === _thisYear || y === _nextYear;
+function _dedupeById(arr){
+  const seen = new Set();
+  const out = [];
+  for (const a of arr) {
+    const id = String(a?.id ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(a);
+  }
+  return out;
 }
 
-// hardcoded caps
-const COUNT_CURRENT = 30;
-const COUNT_LAST = 15;
-const COUNT_NEXT = 15;
-const COUNT_TOP = 10;
+function _parseSeasonLabel(label){
+  const s = String(label || "").toLowerCase();
+  const year = Number((s.match(/(19|20)\d{2}/) || [])[0]);
+  const season =
+    s.includes("winter") ? "winter" :
+    s.includes("spring") ? "spring" :
+    s.includes("summer") ? "summer" :
+    s.includes("fall")   ? "fall" :
+    null;
+  return { year, season };
+}
 
-const SPOTLIGHT_COUNT = 100;
+// ---- EXCLUDE KIDS ----
+// MAL rating usually: "g", "pg", "pg_13", "r", "r_plus", "rx"
+function _isForKids(x){
+  const r = String(x?.rating || "").toLowerCase().trim();
+  if (r === "g" || r === "pg") return true;
 
-// filter raw pools first (so nothing old leaks in)
-const airingWindow = (airingRaw || []).filter(_inWindow);
-const allRawWindow = (allRaw || []).filter(_inWindow);
-const upcomingWindow = (upcomingRaw || []).filter(_inWindow);
+  const gs = Array.isArray(x?.genres) ? x.genres : [];
+  // genres can be like [{id, name}] or strings depending on source
+  for (const g of gs) {
+    const name = String(g?.name ?? g ?? "").toLowerCase().trim();
+    if (name === "kids") return true;
+  }
+  return false;
+}
 
-// 1) Current season (hardcoded 30)
-const currentSeasonList = fillToCountUnique(
-  bySeason(airingWindow, currentSeasonLabel),
-  airingWindow,
-  COUNT_CURRENT
-).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+function _notKids(x){ return !_isForKids(x); }
 
-// 2) Last season (hardcoded 0)
-const lastSeasonList = COUNT_LAST > 0
-  ? fillToCountUnique(
-      sortByScoreDesc(bySeason(allRawWindow, lastSeasonLabel)),
-      sortByScoreDesc(allRawWindow),
-      COUNT_LAST
-    ).map(x => malLikeToHomeEntry(x)).filter(Boolean)
-  : [];
+// ---- CURRENT SEASON (NEW ONLY, NO CONTINUED) ----
+const cur = _parseSeasonLabel(currentSeasonLabel);
 
-// 3) Upcoming next season (hardcoded 15)
-const nextSeasonList = fillToCountUnique(
-  bySeason(upcomingWindow, nextSeasonLabel),
-  upcomingWindow,
-  COUNT_NEXT
-).map(x => malLikeToHomeEntry(x)).filter(Boolean);
+function _isNewThisSeason(x){
+  const ss = x?.start_season;
+  if (!ss) return false;
+  return Number(ss.year) === cur.year &&
+         String(ss.season).toLowerCase() === cur.season;
+}
 
-// 4) Top rated within window (hardcoded 10)
-const topAllTime = sortByScoreDesc(allRawWindow)
-  .slice(0, COUNT_TOP)
+const currentSeasonRaw = (airingRaw || [])
+  .filter(_isNewThisSeason)
+  .filter(_notKids);
+
+const currentSeasonList = _shuffle(currentSeasonRaw)
+  .slice(0, COUNT_CURRENT_SEASON)
   .map(x => malLikeToHomeEntry(x))
   .filter(Boolean);
 
-/// ---- Build spotlight (MANUAL THREAD FIRST) ----
-const spotlightPool = [];
-const spotlightSeen = new Set();
+// ---- TOP RATED (ALL TIME) ----
+const topCandidates = (allRaw || [])
+  .filter(_notKids);
 
-// 0) Manual thread (ALWAYS present)
-const manualThreadList = await fetchManualThreadEntries(MANUAL_THREAD_IDS);
-manualThreadList.forEach(a => {
-  const id = String(a?.id ?? '');
-  if (!id || spotlightSeen.has(id)) return;
-  spotlightSeen.add(id);
-  spotlightPool.push(a);
-});
+const topAllTimeList = _shuffle(
+  sortByScoreDesc(topCandidates).slice(0, 80) // shuffle from top 80
+)
+  .slice(0, COUNT_TOP_ALL_TIME)
+  .map(x => malLikeToHomeEntry(x))
+  .filter(Boolean);
 
-// 1+) Rest of spotlight (seasonal logic)
-[currentSeasonList, lastSeasonList, nextSeasonList].forEach(list => {
-  list.forEach(a => {
-    const id = String(a?.id ?? '');
-    if (!id || spotlightSeen.has(id)) return;
-    spotlightSeen.add(id);
-    spotlightPool.push(a);
-  });
-});
+// ---- UPCOMING (NEXT SEASON) ----
+const upcomingSeasonRaw = bySeason(
+  (upcomingRaw || []).filter(_notKids),
+  nextSeasonLabel
+);
 
+const upcomingList = _shuffle(upcomingSeasonRaw)
+  .slice(0, COUNT_UPCOMING)
+  .map(x => malLikeToHomeEntry(x))
+  .filter(Boolean);
 
-__homeSpotlightPool = spotlightPool.slice(0, SPOTLIGHT_COUNT);
+// ---- MERGE + SHUFFLE FINAL POOL ----
+const spotlightPool = _shuffle(
+  _dedupeById([
+    ...currentSeasonList,
+    ...topAllTimeList,
+    ...upcomingList,
+  ])
+);
+
+// ---- APPLY ----
+__homeSpotlightPool = spotlightPool.slice(0, SPOTLIGHT_CAP);
 __spotlightIds = __homeSpotlightPool.map(a => String(a.id));
-__spotlightIndex = 0;
+__spotlightIndex = __spotlightIds.length ? ((Math.random() * __spotlightIds.length) | 0) : 0;
 
-// Pull entry_cover_panel from D1 and merge into the pool
+// Pull entry_cover_panel from D1
 await __hydrateSpotlightHeroCovers();
+
 
 
 
