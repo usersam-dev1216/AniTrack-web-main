@@ -3769,7 +3769,7 @@ async function fetchManualThreadEntries(ids){
 
 
 
-// ==================== SPOTLIGHT (FULL RECODE) ====================
+/// ==================== SPOTLIGHT (ROBUST FULL REPLACEMENT) ====================
 
 // FORCE rebuild every time
 __homeSpotlightPool = [];
@@ -3777,10 +3777,10 @@ __spotlightIds = [];
 __spotlightIndex = 0;
 
 // ---- CONFIG (EDIT HERE ONLY) ----
-const COUNT_CURRENT_SEASON = 30;
-const COUNT_TOP_ALL_TIME = 0;
-const COUNT_UPCOMING = 30;
-const SPOTLIGHT_CAP = 10;
+const COUNT_CURRENT_SEASON = 34;
+const COUNT_TOP_ALL_TIME = 33;
+const COUNT_UPCOMING = 33;
+const SPOTLIGHT_CAP = 1000;
 
 // ---- helpers ----
 function _shuffle(arr){
@@ -3804,43 +3804,46 @@ function _dedupeById(arr){
   return out;
 }
 
-function _parseSeasonLabel(label){
-  const s = String(label || "").toLowerCase();
-  const year = Number((s.match(/(19|20)\d{2}/) || [])[0]);
-  const season =
-    s.includes("winter") ? "winter" :
-    s.includes("spring") ? "spring" :
-    s.includes("summer") ? "summer" :
-    s.includes("fall")   ? "fall" :
-    null;
-  return { year, season };
-}
-
-// ---- EXCLUDE KIDS ----
-// MAL rating usually: "g", "pg", "pg_13", "r", "r_plus", "rx"
+// ---- EXCLUDE KIDS (STRICT) ----
 function _isForKids(x){
   const r = String(x?.rating || "").toLowerCase().trim();
   if (r === "g" || r === "pg") return true;
 
   const gs = Array.isArray(x?.genres) ? x.genres : [];
-  // genres can be like [{id, name}] or strings depending on source
   for (const g of gs) {
     const name = String(g?.name ?? g ?? "").toLowerCase().trim();
     if (name === "kids") return true;
   }
   return false;
 }
-
 function _notKids(x){ return !_isForKids(x); }
 
-// ---- CURRENT SEASON (NEW ONLY, NO CONTINUED) ----
-const cur = _parseSeasonLabel(currentSeasonLabel);
+// ---- CURRENT SEASON KEY (ROBUST, DATE-BASED) ----
+function _getCurrentSeason(){
+  const d = new Date();
+  const year = d.getFullYear();
+  const m = d.getMonth() + 1;
 
+  const season =
+    m <= 3 ? "winter" :
+    m <= 6 ? "spring" :
+    m <= 9 ? "summer" :
+             "fall";
+
+  return { year, season };
+}
+
+const CUR = _getCurrentSeason();
+
+// ---- CURRENT SEASON (NEW ONLY, NO CONTINUED) ----
 function _isNewThisSeason(x){
   const ss = x?.start_season;
   if (!ss) return false;
-  return Number(ss.year) === cur.year &&
-         String(ss.season).toLowerCase() === cur.season;
+
+  const y = Number(ss.year);
+  const s = String(ss.season || "").toLowerCase().trim();
+
+  return y === CUR.year && s === CUR.season;
 }
 
 const currentSeasonRaw = (airingRaw || [])
@@ -3852,22 +3855,17 @@ const currentSeasonList = _shuffle(currentSeasonRaw)
   .map(x => malLikeToHomeEntry(x))
   .filter(Boolean);
 
-// ---- TOP RATED (ALL TIME) ----
-const topCandidates = (allRaw || [])
-  .filter(_notKids);
-
+// ---- TOP RATED (ALL TIME, NOT KIDS) ----
 const topAllTimeList = _shuffle(
-  sortByScoreDesc(topCandidates).slice(0, 80) // shuffle from top 80
+  sortByScoreDesc((allRaw || []).filter(_notKids)).slice(0, 120)
 )
   .slice(0, COUNT_TOP_ALL_TIME)
   .map(x => malLikeToHomeEntry(x))
   .filter(Boolean);
 
-// ---- UPCOMING (NEXT SEASON) ----
-const upcomingSeasonRaw = bySeason(
-  (upcomingRaw || []).filter(_notKids),
-  nextSeasonLabel
-);
+// ---- UPCOMING (NEXT SEASON, NOT KIDS) ----
+const upcomingSeasonRaw = (upcomingRaw || [])
+  .filter(_notKids);
 
 const upcomingList = _shuffle(upcomingSeasonRaw)
   .slice(0, COUNT_UPCOMING)
@@ -3886,10 +3884,13 @@ const spotlightPool = _shuffle(
 // ---- APPLY ----
 __homeSpotlightPool = spotlightPool.slice(0, SPOTLIGHT_CAP);
 __spotlightIds = __homeSpotlightPool.map(a => String(a.id));
-__spotlightIndex = __spotlightIds.length ? ((Math.random() * __spotlightIds.length) | 0) : 0;
+__spotlightIndex = __spotlightIds.length
+  ? (Math.random() * __spotlightIds.length) | 0
+  : 0;
 
 // Pull entry_cover_panel from D1
 await __hydrateSpotlightHeroCovers();
+
 
 
 
