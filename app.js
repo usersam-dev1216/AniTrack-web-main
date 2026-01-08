@@ -3778,7 +3778,7 @@ __spotlightIndex = 0;
 
 // ---- CONFIG (EDIT HERE ONLY) ----
 const COUNT_CURRENT_SEASON = 30;
-const COUNT_TOP_ALL_TIME = 20;
+const COUNT_TOP_ALL_TIME = 0;
 const COUNT_UPCOMING = 30;
 const SPOTLIGHT_CAP = 10;
 
