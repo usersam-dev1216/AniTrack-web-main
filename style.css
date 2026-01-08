@@ -1073,7 +1073,7 @@ color: var(--text-secondary);
 
 .spotlight-nav{
   position: absolute;
-  right: 22px;
+  right: 17px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
