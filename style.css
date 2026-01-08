@@ -428,10 +428,9 @@ body.route-settings .settings-page-panel{
   padding-block: 40px;
   height: -webkit-fill-available;
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 260px 1fr;
   gap: 28px;
-  background: rgba(255, 255, 255, .05);
-  border-radius: 20px;
+ height: 530px;
   overflow: hidden;
 }
 
@@ -445,11 +444,6 @@ body.route-settings .settings-right{
 
 
 
-/* keep the left divider feel */
-
-body.route-settings .settings-nav{
-  gap: 10px;
-}
 
 /* Row style like your screenshot */
 body.route-settings .settings-nav-item{
@@ -3478,10 +3472,12 @@ body.route-list .anime-card:hover .card-overlay-bottom {
 
 .settings-left {
   padding: 26px 22px;
-  border-right: 1px solid rgba(255,255,255,.08);
+ 
   display: grid;
   grid-template-rows: auto auto 1fr;
   gap: 16px;
+   background: rgba(255, 255, 255, .05);
+  border-radius: 20px;
 }
 
 .settings-title {
@@ -3497,12 +3493,13 @@ padding-bottom: 3px;
   background: linear-gradient(90deg, #c09cff, rgba(255,255,255,0));
   border-radius: 2px;
   margin-top: 6px;
+
 }
 
 .settings-nav {
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 5px;
 }
 
 .settings-nav-item {
