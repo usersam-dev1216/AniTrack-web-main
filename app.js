@@ -3738,13 +3738,7 @@ async function loadHomeEmptyStateRecs() {
     ).map(x => malLikeToHomeEntry(x)).filter(Boolean);
 
 
-    // ---- MANUAL SPOTLIGHT THREAD (ALWAYS FETCHED) ----
-// You can put ANY MAL IDs here
-const MANUAL_THREAD_IDS = [
-  30015,
-  54744,
-  34984
-];
+
 
 // Fetch entries directly from API (no dependency on pools)
 async function fetchManualThreadEntries(ids){
@@ -3873,6 +3867,8 @@ const upcomingList = _shuffle(upcomingSeasonRaw)
   .filter(Boolean);
 
 // ---- MERGE + SHUFFLE FINAL POOL ----
+// We can still merge these lists for discovery, BUT spotlight will ONLY keep entries
+// that end up with a real entry_cover_panel after D1 hydration.
 const spotlightPool = _shuffle(
   _dedupeById([
     ...currentSeasonList,
@@ -3881,15 +3877,28 @@ const spotlightPool = _shuffle(
   ])
 );
 
-// ---- APPLY ----
+// ---- APPLY (TEMP) ----
 __homeSpotlightPool = spotlightPool.slice(0, SPOTLIGHT_CAP);
+
+// Pull entry_cover_panel from D1
+await __hydrateSpotlightHeroCovers();
+
+// ---- FILTER: ONLY KEEP ENTRIES THAT HAVE entry_cover_panel ----
+__homeSpotlightPool = (__homeSpotlightPool || []).filter(a => {
+  const hero = String(
+    a?.entry_cover_panel ??
+    a?.entryCoverPanel ??
+    a?.entry_cover ??
+    ''
+  ).trim();
+  return !!hero;
+});
+
+// ---- REBUILD IDS + INDEX AFTER FILTER ----
 __spotlightIds = __homeSpotlightPool.map(a => String(a.id));
 __spotlightIndex = __spotlightIds.length
   ? (Math.random() * __spotlightIds.length) | 0
   : 0;
-
-// Pull entry_cover_panel from D1
-await __hydrateSpotlightHeroCovers();
 
 
 
@@ -4012,14 +4021,24 @@ function renderHomePage() {
     .sort((a, b) => (Number(b.malScore) || 0) - (Number(a.malScore) || 0));
 
   // --- Spotlight: pick random from ALL entries (cycles through everything) ---
-  const idSet = new Set();
-  const pool = [];
-  (all || []).forEach(a => {
-    const id = String(a?.id ?? '');
-    if (!id || idSet.has(id)) return;
-    idSet.add(id);
-    pool.push(a);
-  });
+  // --- Spotlight: ONLY entries that have entry_cover_panel ---
+const idSet = new Set();
+const pool = [];
+(all || []).forEach(a => {
+  const hero = String(
+    a?.entry_cover_panel ??
+    a?.entryCoverPanel ??
+    a?.entry_cover ??
+    ''
+  ).trim();
+  if (!hero) return;
+
+  const id = String(a?.id ?? '');
+  if (!id || idSet.has(id)) return;
+  idSet.add(id);
+  pool.push(a);
+});
+
 
   const poolKey = pool.map(a => String(a.id)).join('|');
   if (poolKey !== __spotlightKey) {
@@ -4123,36 +4142,55 @@ function updateSpotlightUI({ watching = [], topAiring = [], upcoming = [] } = {}
 
 
 
-  const pool =
+  // Prefer Spotlight pool; fallback to animeList if pool is empty
+const pool =
   (__homeSpotlightPool && __homeSpotlightPool.length)
     ? __homeSpotlightPool
-    : [];
+    : (Array.isArray(animeList) ? animeList : []);
 
-const targetId = String(id ?? '').replace(/^mal:/, '');
-const a = pool.find(x => {
-  const mx = getNumericMalIdFromEntry(x);
-  if (mx && String(mx) === targetId) return true;
-  // fallback: still allow exact id match
-  return String(x?.id ?? '') === String(id ?? '');
-});
-  if (!a) return;
+function _findBySpotlightId(pid){
+  const targetId = String(pid ?? '').replace(/^mal:/, '');
+  return pool.find(x => {
+    const mx = getNumericMalIdFromEntry(x);
+    if (mx && String(mx) === targetId) return true;
+    return String(x?.id ?? '') === String(pid ?? '');
+  }) || null;
+}
 
+// Find a valid entry; if it has no entry_cover_panel, skip forward (bounded loop)
+let a = _findBySpotlightId(__spotlightIds[__spotlightIndex]);
+let guard = 0;
 
-  // Spotlight background:
-  // - If entry_cover_panel exists => use it as the full-width hero image (NO blur, NO cover overlay)
-  // - Else => fall back to default design (blurred bg + cover overlay), and DO NOT skip the entry
-  const hero =
-    String(
-      a?.entry_cover_panel ??
-      a?.entryCoverPanel ??
-      a?.entry_cover ??
-      ''
-    ).trim();
+while (a && guard < __spotlightIds.length) {
+  const hero = String(
+    a?.entry_cover_panel ??
+    a?.entryCoverPanel ??
+    a?.entry_cover ??
+    ''
+  ).trim();
 
-  const cover = String(a?.image || '').trim();
+  if (hero) break;
 
-  const bg = hero || cover;
-  homeSpotlight.style.backgroundImage = bg ? `url("${bg}")` : '';
+  __spotlightIndex = (__spotlightIndex + 1) % __spotlightIds.length;
+  a = _findBySpotlightId(__spotlightIds[__spotlightIndex]);
+  guard++;
+}
+
+if (!a) return;
+
+const hero = String(
+  a?.entry_cover_panel ??
+  a?.entryCoverPanel ??
+  a?.entry_cover ??
+  ''
+).trim();
+
+// If still no hero (e.g., everything missing), just bail safely.
+if (!hero) return;
+
+// ONLY use entry_cover_panel as the spotlight background
+homeSpotlight.style.backgroundImage = `url("${hero}")`;
+
 
   homeSpotlight.style.backgroundSize = 'cover';
   homeSpotlight.style.backgroundPosition = 'center';
