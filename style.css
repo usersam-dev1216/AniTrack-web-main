@@ -471,7 +471,6 @@ body.route-settings .settings-nav-item{
 /* hover like a subtle raised row */
 body.route-settings .settings-nav-item:hover{
   background: rgba(255,255,255,.05);
-  border-color: rgba(255,255,255,.08);
 }
 
 /* selected row */
@@ -3481,7 +3480,7 @@ body.route-list .anime-card:hover .card-overlay-bottom {
 }
 
 .settings-title {
-  font-size: 1.6rem;
+  font-size:larger;
   font-weight: 600;
   color: #c09cff;
 padding-bottom: 3px;
