@@ -3545,6 +3545,45 @@ document.addEventListener('visibilitychange', () => {
 // Spotlight synopsis cache (so home spotlight can show real synopsis even when list endpoints don't include it)
 const __spotlightSynopsisCache = new Map(); // malId -> string OR Promise<string>
 
+// ✅ NEW: Spotlight full-entry cache (title/format/genres/etc for spotlight-only rows)
+const __spotlightFullEntryCache = new Map(); // malId -> object OR Promise<object>
+
+function fetchSpotlightFullEntry(malId){
+  const key = String(malId || '').trim();
+  if (!key) return Promise.resolve(null);
+
+  const existing = __spotlightFullEntryCache.get(key);
+  if (existing && typeof existing.then === 'function') return existing;
+  if (existing && typeof existing === 'object') return Promise.resolve(existing);
+
+  // Pull a "good enough" payload to render the spotlight text
+  const fields = [
+    'id',
+    'title',
+    'alternative_titles',
+    'main_picture',
+    'media_type',
+    'status',
+    'num_episodes',
+    'mean',
+    'start_season',
+    'genres',
+    'synopsis'
+  ].join(',');
+
+  const p = fetch(malApiUrl(`/api/anime/${encodeURIComponent(key)}?fields=${encodeURIComponent(fields)}`))
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => (j && j.data) ? j.data : null)
+    .catch(() => null);
+
+  __spotlightFullEntryCache.set(key, p);
+
+  return p.then(data => {
+    __spotlightFullEntryCache.set(key, data || null);
+    return data || null;
+  });
+}
+
 function getNumericMalIdFromEntry(entry) {
   const raw = entry?.malId ?? entry?.mal_id ?? entry?.id ?? '';
   const s = String(raw);
@@ -4288,20 +4327,38 @@ const metaParts = [
 
   // title (English first; then fallback)
   const spotlightTitle =
-    a?.malInfo?.englishTitle ||
-    a?.englishTitle ||
-    a?.titleEnglish ||
-    a?.title_english ||
-    a?.altTitles?.en ||
-    a?.__malRaw?.alternative_titles?.en ||
-    a?.title ||
-    a?.title_japanese ||
-    a?.titleJapanese ||
-    a?.altTitles?.ja ||
-    a?.__malRaw?.title ||
-    'Untitled';
+  a?.malInfo?.englishTitle ||
+  a?.englishTitle ||
+  a?.titleEnglish ||
+  a?.title_english ||
+  a?.altTitles?.en ||
+  a?.__malRaw?.alternative_titles?.en ||
+  a?.title ||
+  a?.title_japanese ||
+  a?.titleJapanese ||
+  a?.altTitles?.ja ||
+  a?.__malRaw?.title ||
+  'Untitled';
 
-  if (spotlightTitleEl) spotlightTitleEl.textContent = spotlightTitle;
+if (spotlightTitleEl) spotlightTitleEl.textContent = spotlightTitle;
+
+// ✅ If this entry is one of the fallback "MAL #12345" spotlight items, hydrate it from cached payload
+// then re-render title/meta/desc once.
+const mid = Number(getNumericMalIdFromEntry(a) || 0);
+const isFallbackTitle = /^MAL\s*#\d+$/i.test(String(a?.title || '').trim());
+
+if (mid && (isFallbackTitle || spotlightTitle === 'Untitled') && !a.__spotlightHydrated) {
+  a.__spotlightHydrated = true;
+  a.malId = a.malId || mid;
+
+  Promise.resolve(__hydrateEntryFromCachedPayload(a)).then((ok) => {
+    if (!ok) return;
+    // only update if user is still on the same spotlight item
+    if (String(homeSpotlight.dataset.id) !== String(mid)) return;
+    try { updateSpotlightUI(undefined, opts); } catch (_) {}
+  });
+}
+
 
   // meta line
   if (spotlightMetaEl) spotlightMetaEl.textContent = metaParts.join(' • ');
@@ -4313,9 +4370,45 @@ const genres = cleanList(a.genres).slice(0, 4);
 const themes = cleanList(a.themes).slice(0, 4);
 
 const MAX = 520;
-const currentKey = String(a.id);
+
+// ✅ Use MAL id when possible (prevents undefined keys on spotlight-only rows)
+const __mid = getNumericMalIdFromEntry(a);
+const currentKey = String(getNumericMalIdFromEntry(a) || a.id || '');
 
 const synopsis = String(a.synopsis || '').trim();
+
+// ✅ If this spotlight item is missing core fields (common when it only has mal_id + entry_cover_panel),
+// fetch the full entry once, merge, and re-render.
+if (__mid && (!String(a.title || '').trim() && !a.malInfo && !a.__malRaw)) {
+  fetchSpotlightFullEntry(__mid).then(full => {
+    if (!full) return;
+
+    // Merge the important bits into the same object the spotlight is rendering from
+    a.__malRaw = full;
+    a.title = a.title || full.title || '';
+    a.malInfo = a.malInfo || {
+      englishTitle: full?.alternative_titles?.en || '',
+    };
+
+    // genres array -> string (your meta builder expects a.genres as a string in places)
+    if (!String(a.genres || '').trim() && Array.isArray(full.genres)) {
+      a.genres = full.genres.map(g => g?.name).filter(Boolean).join(', ');
+    }
+
+    // cover image
+    const pic = full?.main_picture?.large || full?.main_picture?.medium || '';
+    if (!String(a.image || '').trim() && pic) a.image = pic;
+
+    // synopsis (so you don’t need another call)
+    if (!String(a.synopsis || '').trim() && full?.synopsis) a.synopsis = String(full.synopsis).trim();
+
+    // Only update if user is still on the same spotlight
+    if (String(homeSpotlight.dataset.id) !== currentKey) return;
+
+    // Re-render with the now-complete object
+    try { updateSpotlightUI(); } catch (_) {}
+  });
+}
 const descIsSynopsis = !!synopsis;
 
 let desc = synopsis;
@@ -4353,7 +4446,7 @@ if (!descIsSynopsis && spotlightDescEl) {
   spotlightPrevBtn && (spotlightPrevBtn.disabled = !many);
 
   // keep a data-id on the spotlight (handy for debugging / css hooks)
-  homeSpotlight.dataset.id = String(a.id);
+  homeSpotlight.dataset.id = String(getNumericMalIdFromEntry(a) || a.id || '');
 
   // ✅ start autoplay as soon as Spotlight is actually rendered (after IDs exist)
   if (typeof __spotlightAutoStart === 'function') {
