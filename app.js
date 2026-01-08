@@ -4001,7 +4001,11 @@ function updateSpotlightUI({ watching = [], topAiring = [], upcoming = [] } = {}
 
 
 
-  const pool = (__homeSpotlightPool && __homeSpotlightPool.length) ? __homeSpotlightPool : (animeList || []);
+  const pool =
+  (__homeSpotlightPool && __homeSpotlightPool.length)
+    ? __homeSpotlightPool
+    : [];
+
 const targetId = String(id ?? '').replace(/^mal:/, '');
 const a = pool.find(x => {
   const mx = getNumericMalIdFromEntry(x);
