@@ -3761,6 +3761,53 @@ async function fetchManualThreadEntries(ids){
   return out;
 }
 
+// Spotlight meta hydration (so hero-only entries still get real title/type/score/etc.)
+const __spotlightMetaHydrateCache = new Map(); // malId -> Promise<boolean> | boolean
+
+function __needsSpotlightMeta(a){
+  const t = String(a?.title || '').trim();
+  // treat placeholder titles as "missing"
+  if (!t) return true;
+  if (/^MAL\s*#\d+$/i.test(t)) return true;
+  return false;
+}
+
+function __hydrateSpotlightMetaIfNeeded(a){
+  const malId = getNumericMalIdFromEntry(a);
+  if (!malId) return Promise.resolve(false);
+  if (!__needsSpotlightMeta(a)) return Promise.resolve(false);
+
+  const key = String(malId);
+  const existing = __spotlightMetaHydrateCache.get(key);
+  if (existing === true) return Promise.resolve(true);
+  if (existing && typeof existing.then === 'function') return existing;
+
+  // Uses your existing MAL/Jikan full fetch + apply logic
+  const p = (async () => {
+    try {
+      // malFetchFullById already exists in your file (used by syncEntryByMalId)
+      const item = await malFetchFullById(Number(malId));
+      if (!item) return false;
+
+      // applyMALDiff mutates the entry in-place (title, seasons, score, etc.)
+      applyMALDiff(a, item);
+
+      // Ensure some core fields exist even if MAL returns odd stuff
+      if (!String(a.title || '').trim()) {
+        a.title = String(item?.title_english || item?.title || a.title || '').trim();
+      }
+
+      __spotlightMetaHydrateCache.set(key, true);
+      return true;
+    } catch (e) {
+      console.warn('Spotlight meta hydrate failed for', malId, e);
+      return false;
+    }
+  })();
+
+  __spotlightMetaHydrateCache.set(key, p);
+  return p;
+}
 
 
 /// ==================== SPOTLIGHT (D1 HERO ONLY) ====================
@@ -3771,7 +3818,7 @@ __spotlightIds = [];
 __spotlightIndex = 0;
 
 // ---- CONFIG (EDIT THIS LINE ONLY) ----
-const SPOTLIGHT_QTY = 60; // 👈 change quantity here
+const SPOTLIGHT_QTY = 100; 
 
 // Fetch a bit more than you need (so shuffle still feels random)
 const SPOTLIGHT_FETCH_LIMIT = Math.max(30, SPOTLIGHT_QTY * 4);
