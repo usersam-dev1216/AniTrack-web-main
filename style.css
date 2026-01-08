@@ -446,9 +446,6 @@ body.route-settings .settings-right{
 
 
 /* keep the left divider feel */
-body.route-settings .settings-left{
-  border-right: 1px solid rgba(255,255,255,.10);
-}
 
 body.route-settings .settings-nav{
   gap: 10px;
