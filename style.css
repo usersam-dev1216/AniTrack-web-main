@@ -1555,7 +1555,7 @@ color: var(--text-secondary);
 
 /* ================ HEADER & NAVIGATION ================ */
 
-header{
+header {
   display: flex;
   align-items: center;
   gap: 18px;
@@ -1570,7 +1570,7 @@ justify-self: anchor-center;
   border-radius: var(--app-radius);
 
   background: linear-gradient(180deg, rgba(10,14,26,.86), rgba(10,14,26,.56));
-  border: 1px solid rgba(255,255,255,0.08);
+ 
   box-shadow: 0 22px 70px rgba(0,0,0,.45);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1691,7 +1691,7 @@ justify-content: space-between;
   /* KEY FIX: not transparent, so header highlight lines don't show through */
   background: rgba(10,14,26,.70);
   background-image: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  border: 1px solid rgba(255,255,255,.14);
+  border: 0px solid rgba(255,255,255,.14);
 
   display: grid;
   place-items: center;
