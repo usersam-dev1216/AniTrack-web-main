@@ -1020,7 +1020,7 @@ color: var(--text-secondary);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 1;
 
   /* Non-webkit fallback: 4 lines */
   max-height: 6em;
