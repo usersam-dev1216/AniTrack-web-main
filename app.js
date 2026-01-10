@@ -3901,7 +3901,7 @@ const SPOTLIGHT_CAT_WEIGHTS = {
 };
 
 // fetch extra so we can filter+balance without going empty
-const SPOTLIGHT_FETCH_LIMIT = Math.max(80, SPOTLIGHT_QTY * 6);
+const SPOTLIGHT_FETCH_LIMIT = Math.max(800, SPOTLIGHT_QTY * 60);
 
 /* ------------------- Helpers ------------------- */
 
