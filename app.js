@@ -3601,11 +3601,31 @@ function fetchSpotlightFullEntry(malId){
 }
 
 function getNumericMalIdFromEntry(entry) {
-  const raw = entry?.malId ?? entry?.mal_id ?? entry?.id ?? '';
-  const s = String(raw);
-  if (/^\d+$/.test(s)) return s;
-  const m = s.match(/^mal:(\d+)$/);
-  return m ? m[1] : null;
+  // Prefer explicit MAL fields first
+  const candidates = [
+    entry?.malId,
+    entry?.mal_id,
+    entry?.malID,       // just in case
+    entry?.myanimelist_id,
+    entry?.id,          // fallback: many of your objects store MAL id inside id
+  ];
+
+  for (const raw of candidates) {
+    if (raw == null) continue;
+    const s = String(raw).trim();
+    if (!s) continue;
+
+    // exact forms
+    if (/^\d+$/.test(s)) return s;
+    let m = s.match(/^mal:(\d+)$/i);
+    if (m) return m[1];
+
+    // robust fallback: extract the first digit-run (handles "anime:123", "jikan_123", etc.)
+    m = s.match(/(\d+)/);
+    if (m) return m[1];
+  }
+
+  return null;
 }
 
 function fetchSpotlightSynopsis(malId) {
@@ -3865,7 +3885,20 @@ function __hydrateSpotlightMetaIfNeeded(a){
 }
 
 
-/// ==================== SPOTLIGHT (UNIFIED, HERO-ONLY + CATEGORIES) ====================
+/// ==================== SPOTLIGHT (HERO-MAP ONLY — FIRM + SCALABLE) ====================
+//
+// ✅ Purpose:
+// Build spotlight ONLY from D1 "entry_cover_panel" rows (heroMap).
+// This avoids the “only 4–5 entries” issue caused by filtering MAL rec buckets.
+//
+// Assumes these already exist elsewhere in your app:
+// - __fetchSpotlightHeroMapFromD1(limit)  -> Map-like or object-like hero map
+// - malLikeToHomeEntry(malObj)
+// - fetchSpotlightFullEntry(malId)
+// - getNumericMalIdFromEntry(entry)
+// - __spotlightAutoStart()
+//
+// -----------------------------------------------------------------------------
 
 // FORCE rebuild every time
 __homeSpotlightPool = [];
@@ -3876,31 +3909,23 @@ __spotlightIndex = 0;
 __spotlightPreloadPromise = Promise.resolve();
 __spotlightPreloadDone = true;
 
-
 /* ------------------- CONFIG (EDIT THESE ONLY) ------------------- */
 
-// ✅ Shuffle spotlight pool
 const SPOTLIGHT_SHUFFLE = true;
 
-// ✅ Per-section counts (you asked 20 each)
-const COUNT_HAS_HERO     = 20; // entries which have entry_cover_panel (any season)
-const COUNT_THIS_SEASON  = 20; // currently airing THIS SEASON ONLY
-const COUNT_NEXT_SEASON  = 20; // upcoming NEXT SEASON ONLY
-const COUNT_LAST_SEASON  = 20; // last season
+// how many spotlight items you want shown/rotated
+const SPOTLIGHT_QTY = 80;
 
-// ✅ Total
-const SPOTLIGHT_QTY =
-  COUNT_HAS_HERO + COUNT_THIS_SEASON + COUNT_NEXT_SEASON + COUNT_LAST_SEASON;
+// how many hero rows to pull from D1 (raise as your DB grows)
+const SPOTLIGHT_FETCH_LIMIT = Math.max(500, SPOTLIGHT_QTY * 25);
 
-// fetch extra so we can filter+balance without going empty
-const SPOTLIGHT_FETCH_LIMIT = Math.max(80, SPOTLIGHT_QTY * 6);
-
+// preload/hydration concurrency
+const SPOTLIGHT_HYDRATE_CONCURRENCY = 6;
 
 /* ------------------- Helpers ------------------- */
 
-function __shuffleIf(arr){
+function __shuffle(arr){
   const a = (arr || []).slice();
-  if (!SPOTLIGHT_SHUFFLE) return a;
   for (let i = a.length - 1; i > 0; i--) {
     const j = (Math.random() * (i + 1)) | 0;
     [a[i], a[j]] = [a[j], a[i]];
@@ -3908,239 +3933,183 @@ function __shuffleIf(arr){
   return a;
 }
 
-function __uniqByMid(list){
-  const out = [];
-  const seen = new Set();
-  for (const x of (list || [])){
-    const mid = String(x?.mal_id ?? x?.malId ?? x?.id ?? '').trim();
-    if (!mid || seen.has(mid)) continue;
-    seen.add(mid);
-    out.push(x);
+// normalize numeric MAL id from "123", 123, "mal:123", etc.
+function __normMid(v){
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  const m = s.match(/(\d+)/);
+  return m ? m[1] : "";
+}
+
+// robust heroMap get (key might be "123" or 123)
+function __heroGet(heroMap, midRaw){
+  const mid = __normMid(midRaw);
+  if (!mid) return "";
+  try {
+    const direct =
+      heroMap?.get?.(mid) ??
+      heroMap?.get?.(Number(mid)) ??
+      heroMap?.[mid] ??
+      heroMap?.[Number(mid)];
+    return String(direct || "").trim();
+  } catch {
+    return "";
   }
-  return out;
-}
-
-function __seasonFromDate(d){
-  const m = d.getMonth() + 1; // 1..12
-  const y = d.getFullYear();
-  const s = (m <= 3) ? 'winter' : (m <= 6) ? 'spring' : (m <= 9) ? 'summer' : 'fall';
-  return { year: y, season: s };
-}
-
-function __shiftSeason({year, season}, delta){
-  const order = ['winter','spring','summer','fall'];
-  let idx = order.indexOf(String(season || '').toLowerCase());
-  if (idx < 0) idx = 0;
-  let y = Number(year) || new Date().getFullYear();
-  let n = idx + (Number(delta) || 0);
-
-  while (n < 0) { n += 4; y -= 1; }
-  while (n > 3) { n -= 4; y += 1; }
-
-  return { year: y, season: order[n] };
-}
-
-function __matchStartSeason(x, target){
-  const ss = x?.start_season || x?.startSeason || null;
-  if (!ss) return false;
-  const yy = Number(ss?.year);
-  const sn = String(ss?.season || '').toLowerCase();
-  return (yy === Number(target.year)) && (sn === String(target.season).toLowerCase());
-}
-
-function __heroOfEntry(a){
-  return String(
-    a?.entry_cover_panel ??
-    a?.entryCoverPanel ??
-    a?.entry_cover ??
-    ''
-  ).trim();
 }
 
 function __preloadImage(url){
   return new Promise((resolve) => {
-    if (!url) return resolve(false);
+    const u = String(url || "").trim();
+    if (!u) return resolve(false);
     const img = new Image();
     img.onload = () => resolve(true);
     img.onerror = () => resolve(false);
-    img.src = url;
+    img.src = u;
   });
 }
 
-/* ------------------- Build Spotlight ------------------- */
+// Convert heroMap to stable [mid, hero] pairs (supports Map or plain object)
+function __heroPairs(heroMap){
+  const out = [];
 
-// 1) Pull D1 hero map (mal_id -> entry_cover_panel)
+  // Map-like
+  if (heroMap && typeof heroMap.entries === "function") {
+    for (const [k, v] of heroMap.entries()) {
+      const mid = __normMid(k);
+      const hero = String(v || "").trim();
+      if (mid && hero) out.push([mid, hero]);
+    }
+    return out;
+  }
+
+  // Plain object
+  if (heroMap && typeof heroMap === "object") {
+    for (const k of Object.keys(heroMap)) {
+      const mid = __normMid(k);
+      const hero = String(heroMap[k] || "").trim();
+      if (mid && hero) out.push([mid, hero]);
+    }
+    return out;
+  }
+
+  return out;
+}
+
+/* ------------------- Build Spotlight (HERO MAP ONLY) ------------------- */
+
 const heroMap = await __fetchSpotlightHeroMapFromD1(SPOTLIGHT_FETCH_LIMIT);
 
-// 2) Build an index of available MAL-ish objects we already fetched
-const lookup = __uniqByMid([
-  ...(popularRaw || []),
-  ...(airingRaw || []),
-  ...(upcomingRaw || []),
-  ...(allRaw || []),
-]);
+// 1) Build candidates from D1 only
+let pairs = __heroPairs(heroMap);
 
-const byMid = new Map();
-for (const x of lookup){
-  const mid = String(x?.mal_id ?? x?.malId ?? x?.id ?? '').trim();
-  if (mid && !byMid.has(mid)) byMid.set(mid, x);
-}
+// If nothing, bail safely (won’t crash home)
+if (!pairs.length) {
+  __homeSpotlightPool = [];
+  __spotlightIds = [];
+  __spotlightIndex = 0;
+} else {
+  // 2) Shuffle + cap
+  if (SPOTLIGHT_SHUFFLE) pairs = __shuffle(pairs);
+  pairs = pairs.slice(0, Math.max(1, Number(SPOTLIGHT_QTY) || 1));
 
-// 3) Season targets
-const nowSeason  = __seasonFromDate(new Date());
-const nextSeason = __shiftSeason(nowSeason, +1);
-const lastSeason = __shiftSeason(nowSeason, -1);
+  // 3) Build spotlight pool entries (stable identity!)
+  __homeSpotlightPool = pairs.map(([mid, hero]) => ({
+    id: `mal:${mid}`,         // ✅ stable unique id (prevents DOM/caches collapsing)
+    malId: mid,               // ✅ stable numeric key
+    title: `MAL #${mid}`,     // will be hydrated later
+    subtitle: "",
+    image: "",
+    genres: "",
+    themes: "",
+    status: "",
+    seasons: [],
+    malScore: null,
+    entry_cover_panel: hero,  // ✅ guaranteed
+  }));
 
-// 4) Collector: ONLY keep items that exist in heroMap => guaranteed entry_cover_panel
-function __collectFrom(list){
-  const out = [];
-  for (const x of (list || [])){
-    const mid = String(x?.mal_id ?? x?.malId ?? x?.id ?? '').trim();
-    if (!mid) continue;
-    const hero = heroMap.get(mid);
-    if (!hero) continue; // MUST have entry_cover_panel
-    out.push({ mid, hero, x });
-  }
-  return out;
-}
+  // 4) IDs list is strictly MAL-based (what updateSpotlightUI already expects)
+  __spotlightIds = __homeSpotlightPool.map(a => `mal:${__normMid(a?.malId ?? a?.id)}`);
+  __spotlightIndex = __spotlightIds.length
+    ? (SPOTLIGHT_SHUFFLE ? ((Math.random() * __spotlightIds.length) | 0) : 0)
+    : 0;
 
-// A) “Has entry_cover_panel” bucket (ANY season)
-// Pull directly from heroMap, then enrich with byMid if available
-function __collectAnyHero(){
-  const out = [];
-  for (const [mid, hero] of (heroMap?.entries?.() ? heroMap.entries() : [])){
-    const m = String(mid || '').trim();
-    const h = String(hero || '').trim();
-    if (!m || !h) continue;
-    const x = byMid.get(m) || null;
-    out.push({ mid: m, hero: h, x });
-  }
-  return out;
-}
+  // 5) Optional: register into caches (helps if you have any global id->entry maps)
+  (function __spotlightRegisterIntoCaches(){
+    const pool = __homeSpotlightPool || [];
+    if (!pool.length) return;
 
-// Buckets
-let catAnyHero = __collectAnyHero();
-let catThis    = __collectFrom(airingRaw || [])
-  .filter(it => __matchStartSeason(it.x, nowSeason));
+    const pairs = pool.map(e => [String(e.id), e]);
+    window.__spotlightById = new Map(pairs);
 
-let catNext    = __collectFrom(upcomingRaw || [])
-  .filter(it => __matchStartSeason(it.x, nextSeason));
+    const maybeMaps = [
+      "__homeEntryById",
+      "__entryById",
+      "__entriesById",
+      "homeEntryById",
+      "entryById",
+      "entriesById",
+    ];
 
-let catLast    = __collectFrom(allRaw || [])
-  .filter(it => __matchStartSeason(it.x, lastSeason));
-
-// 5) Shuffle within each bucket (you said shuffling: yes)
-catAnyHero = __shuffleIf(catAnyHero);
-catThis    = __shuffleIf(catThis);
-catNext    = __shuffleIf(catNext);
-catLast    = __shuffleIf(catLast);
-
-// 6) Build final pool (dedupe by mid across buckets)
-const usedMid = new Set();
-const finalPool = [];
-
-function __pushFromList(list, want){
-  const src = list || [];
-  const n = Math.max(0, Number(want) || 0);
-  if (!n) return;
-
-  let pushed = 0;
-
-  for (const it of src){
-    if (finalPool.length >= SPOTLIGHT_QTY) break;
-    if (pushed >= n) break;
-
-    if (!it?.mid || usedMid.has(it.mid)) continue;
-    usedMid.add(it.mid);
-
-    const found = byMid.get(it.mid);
-    const entry = found ? malLikeToHomeEntry(found) : null;
-
-    if (entry){
-      entry.entry_cover_panel = it.hero;
-
-      // optional debug/meta (keep if useful)
-      entry.__start_season = found?.start_season || null;
-
-      finalPool.push(entry);
-    } else {
-      // fallback shell (still valid spotlight item)
-      finalPool.push({
-        id: `mal:${it.mid}`,
-        malId: String(it.mid),
-        title: `MAL #${it.mid}`,
-        subtitle: '',
-        image: '',
-        genres: '',
-        themes: '',
-        status: '',
-        seasons: [],
-        malScore: null,
-        entry_cover_panel: it.hero,
-      });
+    for (const name of maybeMaps){
+      const v = window[name];
+      if (v && typeof v.set === "function") {
+        for (const [k, e] of pairs) v.set(k, e);
+      } else if (v && typeof v === "object") {
+        for (const [k, e] of pairs) v[k] = e;
+      }
     }
+  })();
 
-    pushed++;
-  }
-}
+  // 6) Preload + hydrate
+  __spotlightPreloadDone = false;
 
-// Priority/order (you can reorder these if you want)
-__pushFromList(catAnyHero, COUNT_HAS_HERO);
-__pushFromList(catThis,    COUNT_THIS_SEASON);
-__pushFromList(catNext,    COUNT_NEXT_SEASON);
-__pushFromList(catLast,    COUNT_LAST_SEASON);
+  __spotlightPreloadPromise = (async () => {
+    // Preload hero images first (so spotlight BG swaps instantly)
+    const heroUrls = __homeSpotlightPool.map(a => String(a.entry_cover_panel || "")).filter(Boolean);
+    await Promise.allSettled(heroUrls.map(__preloadImage));
 
-// If still short, fill from remaining heroMap entries (shuffled) that weren’t used
-if (finalPool.length < SPOTLIGHT_QTY){
-  const filler = __shuffleIf(__collectAnyHero());
-  __pushFromList(filler, SPOTLIGHT_QTY - finalPool.length);
-}
+    // Hydrate full entry meta with limited concurrency
+    const mids = __homeSpotlightPool.map(a => __normMid(a?.malId)).filter(Boolean);
 
-// 7) ✅ Hard rule: ONLY keep entries with entry_cover_panel
-__homeSpotlightPool = finalPool.filter(a => !!__heroOfEntry(a));
+    let idx = 0;
+    const workers = Array.from({ length: SPOTLIGHT_HYDRATE_CONCURRENCY }, async () => {
+      while (idx < mids.length) {
+        const my = idx++;
+        const mid = mids[my];
+        try {
+          const full = await fetchSpotlightFullEntry(mid);
+          if (full) {
+            // Patch the placeholder in-place so updateSpotlightUI picks it up naturally
+            const spot = __homeSpotlightPool.find(x => __normMid(x?.malId) === mid);
+            if (spot) {
+              const richer = malLikeToHomeEntry(full);
+              // preserve stable identity + hero
+              const hero = spot.entry_cover_panel;
+              const id = spot.id;
+              const malId = spot.malId;
+              Object.assign(spot, richer);
+              spot.id = id;
+              spot.malId = malId;
+              spot.entry_cover_panel = hero;
+            }
+          }
+        } catch (_) {}
+      }
+    });
 
-// 8) Build IDs + pick a start index
-__spotlightIds = __homeSpotlightPool.map(a => String(a.id));
-__spotlightIndex = __spotlightIds.length
-  ? (SPOTLIGHT_SHUFFLE ? ((Math.random() * __spotlightIds.length) | 0) : 0)
-  : 0;
-
-// 9) ✅ Preload data ASAP (hero images + full spotlight meta)
-// - starts immediately after pool is built
-// - autoplay kicks in as soon as preload finishes
-__spotlightPreloadDone = false;
-
-__spotlightPreloadPromise = (async () => {
-  // preload hero images first (fast path so spotlight looks right ASAP)
-  const heroUrls = __homeSpotlightPool.map(a => __heroOfEntry(a)).filter(Boolean);
-  await Promise.allSettled(heroUrls.map(__preloadImage));
-
-  // hydrate full entry meta (cached) with limited concurrency
-  const mids = __homeSpotlightPool
-    .map(a => getNumericMalIdFromEntry(a))
-    .filter(Boolean);
-
-  const CONCURRENCY = 6; // slightly higher for “as soon as possible”
-  let idx = 0;
-
-  const workers = Array.from({ length: CONCURRENCY }, async () => {
-    while (idx < mids.length) {
-      const my = idx++;
-      const mid = mids[my];
-      try { await fetchSpotlightFullEntry(mid); } catch (_) {}
-    }
+    await Promise.allSettled(workers);
+  })()
+  .catch(() => null)
+  .finally(() => {
+    __spotlightPreloadDone = true;
+    try { __spotlightAutoStart(); } catch (_) {}
   });
+}
 
-  await Promise.allSettled(workers);
-})()
-.catch(() => null)
-.finally(() => {
-  __spotlightPreloadDone = true;
+// (optional) quick sanity (remove later)
+// console.log("[SPOTLIGHT] hero pairs:", pairs?.length, "pool:", __homeSpotlightPool?.length, "ids:", __spotlightIds?.length);
 
-  // ✅ start autoplay ONLY after preload finishes (if your autoplay functions exist)
-  try { __spotlightAutoStart(); } catch (_) {}
-});
-
+/// ==================== END SPOTLIGHT (HERO-MAP ONLY) ====================
 
 
 
