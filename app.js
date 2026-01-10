@@ -3879,7 +3879,7 @@ __spotlightPreloadDone = true;
 /* ------------------- CONFIG (EDIT THESE ONLY) ------------------- */
 
 // (1) ✅ ONE LINE: how many spotlight entries to show
-const SPOTLIGHT_QTY = 100;
+const SPOTLIGHT_QTY = 1000;
 
 // (2) ✅ ONE LINE: enable/disable shuffle
 const SPOTLIGHT_SHUFFLE = true;
