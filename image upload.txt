@@ -2,6 +2,9 @@
   const API_BASE = "https://anitrack-library.usersam1216.workers.dev";
   const ADMIN_TOKEN = ""; // optional (leave "" if not used)
 
+  const DEFAULT_PREFIX =
+    "https://raw.githubusercontent.com/usersam-dev1216/AniTrack-web-main/refs/heads/main/entry_cover_panel/";
+
   while (true) {
     const malIdRaw = prompt("enter mal id:");
     if (malIdRaw === null) return console.log("Stopped (Cancel on MAL ID).");
@@ -12,7 +15,8 @@
       continue;
     }
 
-    const imgRaw = prompt("enter image url:");
+    // Prefill the prompt with your default prefix
+    const imgRaw = prompt("enter image url:", DEFAULT_PREFIX);
     if (imgRaw === null) return console.log("Stopped (Cancel on image url).");
 
     const IMAGE_URL = String(imgRaw).trim();
