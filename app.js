@@ -3883,8 +3883,8 @@ __spotlightPreloadDone = true;
 const SPOTLIGHT_SHUFFLE = true;
 
 // ✅ Per-section counts (you asked 20 each)
-const COUNT_HAS_HERO     = 16; // entries which have entry_cover_panel (any season)
-const COUNT_THIS_SEASON  = 24; // currently airing THIS SEASON ONLY
+const COUNT_HAS_HERO     = 20; // entries which have entry_cover_panel (any season)
+const COUNT_THIS_SEASON  = 20; // currently airing THIS SEASON ONLY
 const COUNT_NEXT_SEASON  = 20; // upcoming NEXT SEASON ONLY
 const COUNT_LAST_SEASON  = 20; // last season
 
@@ -3893,7 +3893,7 @@ const SPOTLIGHT_QTY =
   COUNT_HAS_HERO + COUNT_THIS_SEASON + COUNT_NEXT_SEASON + COUNT_LAST_SEASON;
 
 // fetch extra so we can filter+balance without going empty
-const SPOTLIGHT_FETCH_LIMIT = Math.max(800, SPOTLIGHT_QTY * 60);
+const SPOTLIGHT_FETCH_LIMIT = Math.max(80, SPOTLIGHT_QTY * 6);
 
 
 /* ------------------- Helpers ------------------- */
