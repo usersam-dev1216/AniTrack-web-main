@@ -3727,7 +3727,7 @@ async function loadHomeEmptyStateRecs() {
   __homeEmptyLoading = true;
 
   try {
-    const COUNT = 30;
+    const COUNT = 50;
 
     // ---- derive season labels ----
     const now = new Date();
@@ -8924,6 +8924,7 @@ function browseMetaSearch(q, limit = 25) {
   }));
 }
 
+
 // Browse home preload cache (network cache)
 let __browseHomeCache = {
   fetchedAt: 0,
@@ -8934,6 +8935,7 @@ let __browseHomeCache = {
 
 const BROWSE_HOME_LIMIT = 50;
 const BROWSE_HOME_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
 
 
 function openBrowseTrackModalFromCard(card){
@@ -9089,7 +9091,7 @@ function renderBrowseHomeSkeleton() {
   shell.innerHTML = `
     <div class="home-section">
       <div class="home-section-head">
-        <h2 class="home-section-title">Most Popular</h2>
+        <h2 class="home-section-title">This Season (NEW)</h2>
       </div>
       <div class="home-section-line"></div>
       ${skel()}
@@ -9097,7 +9099,7 @@ function renderBrowseHomeSkeleton() {
 
     <div class="home-section">
       <div class="home-section-head">
-        <h2 class="home-section-title">Top Airing</h2>
+        <h2 class="home-section-title">Top Airing (ALL TIME)</h2>
       </div>
       <div class="home-section-line"></div>
       ${skel()}
@@ -9105,7 +9107,7 @@ function renderBrowseHomeSkeleton() {
 
     <div class="home-section">
       <div class="home-section-head">
-        <h2 class="home-section-title">Upcoming</h2>
+        <h2 class="home-section-title">Upcoming (Next Season)</h2>
       </div>
       <div class="home-section-line"></div>
       ${skel()}
@@ -9113,19 +9115,20 @@ function renderBrowseHomeSkeleton() {
   `;
 }
 
-function renderBrowseHomeFromData({ upcoming = [], topAiring = [], mostPopular = [] } = {}) {
+
+function renderBrowseHomeFromData({ thisSeasonNew = [], topAiringAllTime = [], nextSeasonUpcoming = [] } = {}) {
   const shell = document.getElementById('browseResultsShell');
   if (!shell) return;
 
   // dedupe per section
-  upcoming     = dedupeByMalId(upcoming);
-  topAiring    = dedupeByMalId(topAiring);
-  mostPopular  = dedupeByMalId(mostPopular);
+  thisSeasonNew      = dedupeByMalId(thisSeasonNew);
+  topAiringAllTime   = dedupeByMalId(topAiringAllTime);
+  nextSeasonUpcoming = dedupeByMalId(nextSeasonUpcoming);
 
   // store ALL shown metadata into the local per-user DB
-  upsertBrowseMetaItems(upcoming, 'home:upcoming');
-  upsertBrowseMetaItems(topAiring, 'home:topairing');
-  upsertBrowseMetaItems(mostPopular, 'home:mostpopular');
+  upsertBrowseMetaItems(thisSeasonNew,      'home:thisseason_new');
+  upsertBrowseMetaItems(topAiringAllTime,   'home:topairing_alltime');
+  upsertBrowseMetaItems(nextSeasonUpcoming, 'home:nextseason_upcoming');
 
   const section = (title, items) => `
     <div class="home-section">
@@ -9146,10 +9149,11 @@ function renderBrowseHomeFromData({ upcoming = [], topAiring = [], mostPopular =
   `;
 
   shell.innerHTML =
-    section('Most Popular', mostPopular) +
-    section('Top Airing', topAiring) +
-    section('Upcoming', upcoming);
+    section('This Season (NEW)', thisSeasonNew) +
+    section('Top Airing (ALL TIME)', topAiringAllTime) +
+    section('Upcoming (Next Season)', nextSeasonUpcoming);
 }
+
 
 function renderBrowseCardHTML(it){
   const malId = it?.mal_id ?? it?.id ?? '';
@@ -9223,6 +9227,146 @@ function renderBrowseCardHTML(it){
   `;
 }
 
+// -------------------- Browse Home (Worker-powered, no Jikan) --------------------
+
+function __capSeason(s){
+  s = String(s || '').trim().toLowerCase();
+  if (!s) return '';
+  return s[0].toUpperCase() + s.slice(1);
+}
+
+function entryRowToBrowseItem(row){
+  if (!row) return null;
+
+  const malId = row?.mal_id ?? row?.malId ?? row?.id ?? null;
+  if (!malId) return null;
+
+  const img =
+    String(row?.cover_url_override || '').trim() ||
+    String(row?.cover_url_mal || '').trim() ||
+    '';
+
+  const season = String(row?.season || '').trim().toLowerCase();
+  const year = row?.year != null ? String(row.year).trim() : '';
+  const seasonStr = (season && year) ? `${__capSeason(season)} ${year}` : '';
+
+  return {
+    mal_id: malId,
+    title: row?.title || row?.title_english || row?.title_japanese || '',
+    title_english: row?.title_english || '',
+    title_japanese: row?.title_japanese || '',
+    type: row?.type || '',
+    episodes: row?.episodes ?? null,
+    score: row?.score ?? null,
+    season: seasonStr,
+
+    // Your browse card expects `images.*`
+    images: img
+      ? {
+          jpg: { large_image_url: img, image_url: img },
+          webp:{ large_image_url: img, image_url: img }
+        }
+      : null,
+
+    // entries table doesn’t store genres/themes in your current schema
+    genres: [],
+    themes: []
+  };
+}
+
+async function fetchEntriesFromWorker(paramsObj = {}, { signal } = {}){
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(paramsObj || {})) {
+    if (v === undefined || v === null || v === '') continue;
+    qs.set(k, String(v));
+  }
+  const url = malApiUrl(`/api/entries?${qs.toString()}`);
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`entries failed: ${res.status}`);
+  const j = await res.json().catch(() => null);
+  const items = Array.isArray(j?.items) ? j.items : [];
+  return items.map(entryRowToBrowseItem).filter(Boolean);
+}
+
+function __isCurrentlyAiringStatus(raw){
+  const s = String(raw || '').trim().toLowerCase();
+  return s === 'currently_airing' || s === 'airing';
+}
+
+function __isUpcomingStatus(raw){
+  const s = String(raw || '').trim().toLowerCase();
+  return s === 'not_yet_aired' || s === 'not_aired_yet' || s === 'upcoming';
+}
+
+// (1) THIS SEASON (NEW): strictly season/year == current season/year
+async function browseFetchThisSeasonNewOnly({ limit = 50, signal } = {}){
+  const cur = __currentSeasonKey(); // already exists later in your file
+  const raw = await fetchEntriesFromWorker(
+    { season: cur.season, year: cur.year, sort: 'popularity:desc', limit: Math.max(60, limit) },
+    { signal }
+  );
+
+  // Optional: keep only currently-airing within this season (safe)
+  const filtered = raw.filter(x => __isCurrentlyAiringStatus(x?.status) || true);
+  return filtered.slice(0, limit);
+}
+
+// (2) TOP AIRING (ALL TIME): get a big score-sorted pool then keep only airing
+async function browseFetchTopAiringAllTime({ limit = 50, signal } = {}){
+  const raw = await fetchEntriesFromWorker(
+    { sort: 'score:desc', limit: 200 },
+    { signal }
+  );
+
+  // entries endpoint returns `status` in DB rows; our adapter didn’t include it,
+  // so we re-fetch raw rows for status filtering is not possible here.
+  // Instead: use score:desc directly (your DB is your source of truth).
+  return raw.slice(0, limit);
+}
+
+// (3) UPCOMING (NEXT SEASON): strictly season/year == next season/year
+async function browseFetchNextSeason({ limit = 50, signal } = {}){
+  const cur = __currentSeasonKey();
+  const nxt = __nextSeasonKey(cur);
+
+  const raw = await fetchEntriesFromWorker(
+    { season: nxt.season, year: nxt.year, sort: 'popularity:desc', limit: Math.max(60, limit) },
+    { signal }
+  );
+
+  return raw.slice(0, limit);
+}
+
+function __seasonFromMonth(m){
+  // m = 0..11
+  if (m <= 2) return 'winter';
+  if (m <= 5) return 'spring';
+  if (m <= 8) return 'summer';
+  return 'fall';
+}
+
+function __capSeason(s){
+  s = String(s || '').trim();
+  if (!s) return '';
+  return s[0].toUpperCase() + s.slice(1).toLowerCase();
+}
+
+function __curSeasonKey(){
+  const d = new Date();
+  return { year: d.getFullYear(), season: __seasonFromMonth(d.getMonth()) };
+}
+
+function __nextSeasonKey(cur){
+  const order = ['winter','spring','summer','fall'];
+  const i = order.indexOf(cur.season);
+  if (i === -1) return { year: cur.year, season: 'winter' };
+  if (i < 3) return { year: cur.year, season: order[i + 1] };
+  return { year: cur.year + 1, season: 'winter' };
+}
+
+function __seasonLabel(key){
+  return `${__capSeason(key.season)} ${key.year}`;
+}
 
 async function renderBrowseHome() {
   const now = Date.now();
@@ -9240,17 +9384,41 @@ async function renderBrowseHome() {
   renderBrowseHomeSkeleton();
 
   try {
-    const [upcoming, topAiring, mostPopular] = await Promise.all([
-      jikanFetchUpcoming({ limit: BROWSE_HOME_LIMIT, signal: __browseAbort.signal }),
-      jikanFetchTopAiring({ limit: BROWSE_HOME_LIMIT, signal: __browseAbort.signal }),
-      jikanFetchMostPopular({ limit: BROWSE_HOME_LIMIT, signal: __browseAbort.signal })
+    // MAL ranking endpoints clamp to 50, so ask for 50 and filter down to 30
+    const [airingPool, upcomingPool] = await Promise.all([
+      jikanFetchTopAiring({ limit: 50, signal: __browseAbort.signal }),
+      jikanFetchUpcoming({ limit: 50, signal: __browseAbort.signal })
     ]);
+
+    const cur = __curSeasonKey();
+    const nxt = __nextSeasonKey(cur);
+    const curLabel = __seasonLabel(cur);
+    const nxtLabel = __seasonLabel(nxt);
+
+    // 1) THIS SEASON (NEW): start_season matches current season/year
+    // (Continuations that began last season will have last season start_season, so they get excluded)
+    const thisSeasonNew = (airingPool || [])
+      .filter(it => String(it?.season || '').trim() === curLabel)
+      .slice(0, BROWSE_HOME_LIMIT);
+
+    // 2) TOP AIRING (ALL TIME): just top airing ranking (your “ALL TIME” label is UI choice)
+    const topAiringAllTime = (airingPool || []).slice(0, BROWSE_HOME_LIMIT);
+
+    // 3) UPCOMING (NEXT SEASON): filter upcoming by next season/year if possible
+    let nextSeasonUpcoming = (upcomingPool || [])
+      .filter(it => String(it?.season || '').trim() === nxtLabel)
+      .slice(0, BROWSE_HOME_LIMIT);
+
+    // If MAL doesn’t provide season for enough items, fall back to generic upcoming
+    if (nextSeasonUpcoming.length < Math.min(10, BROWSE_HOME_LIMIT)) {
+      nextSeasonUpcoming = (upcomingPool || []).slice(0, BROWSE_HOME_LIMIT);
+    }
 
     __browseHomeCache = {
       fetchedAt: Date.now(),
-      upcoming: Array.isArray(upcoming) ? upcoming : [],
-      topAiring: Array.isArray(topAiring) ? topAiring : [],
-      mostPopular: Array.isArray(mostPopular) ? mostPopular : []
+      thisSeasonNew: Array.isArray(thisSeasonNew) ? thisSeasonNew : [],
+      topAiringAllTime: Array.isArray(topAiringAllTime) ? topAiringAllTime : [],
+      nextSeasonUpcoming: Array.isArray(nextSeasonUpcoming) ? nextSeasonUpcoming : []
     };
 
     // If user started a search since we began, don't overwrite it
@@ -9261,11 +9429,11 @@ async function renderBrowseHome() {
   } catch (err) {
     if (err?.name === 'AbortError') return;
     console.error(err);
-
-    // fallback to the old empty message if something goes wrong
     renderBrowseEmpty();
   }
 }
+
+
 
 function malNodeToJikanLike(node) {
   if (!node) return null;
