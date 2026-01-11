@@ -8960,9 +8960,9 @@ const BROWSE_RECENT_KEY = 'ANITRACK_BROWSE_RECENT';
 const BROWSE_MODE_KEY = 'ANITRACK_BROWSE_MODE';
 
 /* ✅ Browse content toggles (edit these 3 lines only) */
-const BROWSE_SHOW_KIDS = false;
-const BROWSE_SHOW_R18 = false;
-const BROWSE_SHOW_CONTINUED = false;
+const BROWSE_SHOW_KIDS = false;      // always hide Kids
+const BROWSE_SHOW_R18 = false;       // always hide Hentai/Erotica/Rx/R+/17+
+const BROWSE_SHOW_CONTINUED = false; // always hide continued-from-previous-season
 
 
 function __getBrowseMode(){
@@ -9168,7 +9168,10 @@ function renderBrowsePage() {
 
 function renderBrowseCardHTML(it){
   const malId = it?.mal_id ?? it?.id ?? '';
-  const title = (it?.title || it?.title_english || it?.title_japanese || 'Untitled').toString().trim() || 'Untitled';
+  const title =
+  (it?.title_english && String(it.title_english).trim()) ||
+  (it?.title && String(it.title).trim()) ||
+  'Untitled';
 
   const img =
     it?.images?.webp?.large_image_url ||
@@ -9368,17 +9371,80 @@ function entryRowToBrowseItem(row){
 }
 
 async function fetchEntriesFromWorker(paramsObj = {}, { signal } = {}){
-  const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(paramsObj || {})) {
-    if (v === undefined || v === null || v === '') continue;
-    qs.set(k, String(v));
+  const target = Math.max(0, Number(paramsObj?.limit ?? 0) || 0);
+  const HARD_MAX = 8000; // safety cap so a broken API can't infinite-loop
+  const wantTotal = target > 0 ? Math.min(target, HARD_MAX) : 0;
+
+  // We will request in chunks; if the API ignores paging, we detect repeats and stop.
+  const CHUNK = 200;
+
+  // Copy params so we don't mutate caller object
+  const baseParams = { ...(paramsObj || {}) };
+  delete baseParams.cursor;
+  delete baseParams.page;
+
+  const out = [];
+  const seenFirstIds = new Set();
+
+  let cursor = null;
+  let page = 1;
+
+  while (true) {
+    const remaining = wantTotal ? (wantTotal - out.length) : CHUNK;
+    const chunkLimit = Math.max(1, Math.min(CHUNK, remaining || CHUNK));
+
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(baseParams)) {
+      if (v === undefined || v === null || v === '') continue;
+      qs.set(k, String(v));
+    }
+    qs.set('limit', String(chunkLimit));
+
+    // Prefer cursor pagination if the backend supports it, otherwise fall back to page.
+    if (cursor) qs.set('cursor', String(cursor));
+    else qs.set('page', String(page));
+
+    const url = malApiUrl(`/api/entries?${qs.toString()}`);
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error(`entries failed: ${res.status}`);
+
+    const j = await res.json().catch(() => null);
+    const items = Array.isArray(j?.items) ? j.items : [];
+
+    // Stop conditions
+    if (!items.length) break;
+
+    // Detect "same page returned again" (API ignoring cursor/page)
+    const firstId = String(items?.[0]?.mal_id ?? items?.[0]?.id ?? '');
+    if (firstId) {
+      if (seenFirstIds.has(firstId)) break;
+      seenFirstIds.add(firstId);
+    }
+
+    for (const row of items) {
+      const it = entryRowToBrowseItem(row);
+      if (it) out.push(it);
+      if (wantTotal && out.length >= wantTotal) break;
+    }
+
+    if (wantTotal && out.length >= wantTotal) break;
+
+    // Cursor support (if backend returns it)
+    const nextCursor = j?.next_cursor ?? j?.nextCursor ?? j?.cursor_next ?? null;
+    if (nextCursor) {
+      cursor = nextCursor;
+      continue;
+    }
+
+    // Page fallback: if returned less than requested, we're done
+    if (items.length < chunkLimit) break;
+    page += 1;
+
+    // Absolute safety cap on loops
+    if (page > 200) break;
   }
-  const url = malApiUrl(`/api/entries?${qs.toString()}`);
-  const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(`entries failed: ${res.status}`);
-  const j = await res.json().catch(() => null);
-  const items = Array.isArray(j?.items) ? j.items : [];
-  return items.map(entryRowToBrowseItem).filter(Boolean);
+
+  return out;
 }
 
 function __isCurrentlyAiringStatus(raw){
@@ -9602,12 +9668,22 @@ const __applyBrowseToggles = (arr, { allowContinued = true } = {}) => {
       limit: 5000
     });
 
-    const seasonalAll = (Array.isArray(seasonalRows) ? seasonalRows : [])
-      .filter(r => __isCurrentlyAiringStatus(r?.status));
+   const curKey = __currentSeasonLabel(); // { season: 'winter', year: 2026 }
 
-   const seasonal = __applyBrowseToggles(seasonalAll, {
+const seasonalAll = (Array.isArray(seasonalRows) ? seasonalRows : [])
+  // must be airing now
+  .filter(r => __isCurrentlyAiringStatus(r?.status))
+  // must belong to the current season label (e.g. "Winter 2026")
+  .filter(r => {
+    const k = __parseSeasonLabel(String(r?.season || ''));
+    return !!k && k.year === curKey.year && k.season === curKey.season;
+  });
+
+const seasonal = __applyBrowseToggles(seasonalAll, {
+  // keep using your toggle, but since you want NO continued entries, this should stay false
   allowContinued: !!BROWSE_SHOW_CONTINUED
 });
+
 
 
     // Top rated (editable from ONE LINE const)

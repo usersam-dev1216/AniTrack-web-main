@@ -147,7 +147,7 @@ body.route-entrydetails[data-entrydetails-bg="1"] .entrydetails-page::after{
 #browseView .browse-entry-cover{
   flex: 0 0 auto;
   height: 175px;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 3 / 4;
   border-radius: 10px;
   overflow: hidden;
  
