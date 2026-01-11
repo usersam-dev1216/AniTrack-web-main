@@ -8862,10 +8862,24 @@ function upsertBrowseMetaItems(items, source = 'unknown') {
     const compact = compactJikanItem(it) || null;
     if (!compact) continue;
 
-    const existing = __browseMetaDB.entries[malId];
+    const existing = __browseMetaDB.entries[malId] || {};
+
+    // ✅ Don't overwrite good cached genres/themes/images with empty placeholders
+    const incomingGenres = Array.isArray(compact?.genres) ? compact.genres : [];
+    const incomingThemes = Array.isArray(compact?.themes) ? compact.themes : [];
+    const incomingImages = compact?.images || null;
+
     __browseMetaDB.entries[malId] = {
       ...existing,
       ...compact,
+
+      // preserve arrays if incoming is empty
+      genres: incomingGenres.length ? incomingGenres : (Array.isArray(existing.genres) ? existing.genres : []),
+      themes: incomingThemes.length ? incomingThemes : (Array.isArray(existing.themes) ? existing.themes : []),
+
+      // preserve images if incoming is null
+      images: incomingImages || existing.images || null,
+
       _lastSeenAt: Date.now(),
       _source: source
     };
@@ -8928,13 +8942,77 @@ function browseMetaSearch(q, limit = 25) {
 // Browse home preload cache (network cache)
 let __browseHomeCache = {
   fetchedAt: 0,
-  upcoming: [],
-  topAiring: [],
-  mostPopular: []
+  seasonal: [],
+  topRated: []
 };
 
-const BROWSE_HOME_LIMIT = 50;
 const BROWSE_HOME_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Seasonal shows "currently airing" (includes new + continued + everything)
+const BROWSE_LIMIT_SEASONAL = 320;
+
+// ✅ EDIT THIS ONE LINE ONLY (Top Rated count)
+const BROWSE_LIMIT_TOP_RATED = 50;
+
+// Recently viewed is fixed to 30 (localStorage)
+const BROWSE_RECENT_LIMIT = 30;
+const BROWSE_RECENT_KEY = 'ANITRACK_BROWSE_RECENT';
+const BROWSE_MODE_KEY = 'ANITRACK_BROWSE_MODE';
+
+/* ✅ Browse content toggles (edit these 3 lines only) */
+const BROWSE_SHOW_KIDS = false;
+const BROWSE_SHOW_R18 = false;
+const BROWSE_SHOW_CONTINUED = false;
+
+
+function __getBrowseMode(){
+  const v = String(localStorage.getItem(BROWSE_MODE_KEY) || '').trim();
+  return (v === 'seasonal' || v === 'topRated' || v === 'recent') ? v : 'seasonal';
+}
+
+function __setBrowseMode(mode){
+  const m = (mode === 'seasonal' || mode === 'topRated' || mode === 'recent') ? mode : 'seasonal';
+  localStorage.setItem(BROWSE_MODE_KEY, m);
+  return m;
+}
+
+function __readBrowseRecent(){
+  try {
+    const arr = JSON.parse(localStorage.getItem(BROWSE_RECENT_KEY) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function __writeBrowseRecent(arr){
+  try { localStorage.setItem(BROWSE_RECENT_KEY, JSON.stringify(arr)); } catch {}
+}
+
+function __rememberBrowseRecentMalId(malId){
+  const mid = String(malId || '').trim();
+  if (!mid) return;
+
+  const now = Date.now();
+  const prev = __readBrowseRecent()
+    .filter(x => x && String(x.malId) !== mid);
+
+  prev.unshift({ malId: mid, ts: now });
+  __writeBrowseRecent(prev.slice(0, BROWSE_RECENT_LIMIT));
+}
+
+async function __fetchEntryRowByMalId(malId){
+  const mid = String(malId || '').trim();
+  if (!mid) return null;
+  try {
+    const res = await fetch(malApiUrl(`/api/entries/${encodeURIComponent(mid)}`));
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j?.entry || j?.data || j || null;
+  } catch {
+    return null;
+  }
+}
 
 
 
@@ -8976,47 +9054,63 @@ function initBrowseSearch() {
   const shell = document.getElementById('browseResultsShell');
   if (!input || !clear || !shell) return;
 
-  // Make cards clickable (event delegation)
+  // ✅ Bind toggle ONCE (must NOT be inside card click)
+  if (!initBrowseSearch.__boundToggle) {
+    initBrowseSearch.__boundToggle = true;
+
+    const toggle = document.getElementById('browseModeToggle');
+    toggle?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.browse-mode-tab');
+      if (!btn) return;
+
+      const mode = __setBrowseMode(String(btn.dataset.mode || 'seasonal'));
+
+      // switching tab => go back to browse "home"
+      input.value = '';
+      clear.style.display = 'none';
+
+      renderBrowseHome(true);
+      __syncBrowseToggleUI(mode);
+    });
+  }
+
+  // ✅ Card interactions (event delegation)
   if (!initBrowseSearch.__boundClicks) {
     initBrowseSearch.__boundClicks = true;
 
-shell.addEventListener('click', (e) => {
-  const card = e.target.closest('.browse-anime-card');
-  if (!card) return;
+    shell.addEventListener('click', (e) => {
+      const card = e.target.closest('.browse-anime-card');
+      if (!card) return;
 
-   // "+" opens the User Entry modal (UI-only for now)
-  if (e.target.closest('.browse-entry-plus')) {
-    e.preventDefault();
-    e.stopPropagation();
+      // "+" opens the User Entry modal (your current behavior)
+      if (e.target.closest('.browse-entry-plus')) {
+        e.preventDefault();
+        e.stopPropagation();
 
-    const malId = card.getAttribute('data-mal-id');
-    if (malId) openUserEntryModalFromMalId(malId);
+        const malId = card.getAttribute('data-mal-id');
+        if (malId) openUserEntryModalFromMalId(malId);
+        return;
+      }
 
-    return;
+      // Normal click opens EntryDetails + remembers recent
+      const malId = card.getAttribute('data-mal-id');
+      if (!malId) return;
+
+      __rememberBrowseRecentMalId(malId);
+
+      e.preventDefault();
+      openEntryDetails(`mal:${malId}`, 'browse');
+    });
+
+    // Right-click on browse cards => "List edit" menu
+    shell.addEventListener('contextmenu', (e) => {
+      const card = e.target.closest('.browse-anime-card');
+      if (!card) return;
+      e.preventDefault();
+      const malId = card.getAttribute('data-mal-id') || '';
+      if (malId) showListEditMenu(malId, e.clientX, e.clientY);
+    });
   }
-
-
-  // Normal click on a browse card opens EntryDetails
-  const malId = card.getAttribute('data-mal-id');
-  if (!malId) return;
-
-  e.preventDefault();
-  openEntryDetailsMAL(malId);
-});
-
-
-// Right-click on browse cards => "List edit" menu
-shell.addEventListener('contextmenu', (e) => {
-  const card = e.target.closest('.browse-anime-card');
-  if (!card) return;
-  e.preventDefault();
-  const malId = card.getAttribute('data-mal-id') || '';
-  if (malId) showListEditMenu(malId, e.clientX, e.clientY);
-});
-
-
-  }
-
 
   const setClearVisible = () => {
     clear.style.display = input.value.trim() ? 'inline-flex' : 'none';
@@ -9025,8 +9119,8 @@ shell.addEventListener('contextmenu', (e) => {
   clear.addEventListener('click', () => {
     input.value = '';
     setClearVisible();
-    // If you already implemented preload sections earlier, swap this to renderBrowseHome()
-    renderBrowseEmpty();
+    // ✅ go back to toggle home (NOT empty state)
+    renderBrowseHome(true);
     input.focus();
   });
 
@@ -9037,20 +9131,19 @@ shell.addEventListener('contextmenu', (e) => {
     if (__browseTimer) clearTimeout(__browseTimer);
 
     if (q.length < 2) {
-      // If you already implemented preload sections earlier, swap this to renderBrowseHome()
-      renderBrowseEmpty();
+      renderBrowseHome(false);
       return;
     }
 
     __browseTimer = setTimeout(() => {
       runBrowseSearch(q).catch((err) => {
-        // This happens every time we abort the previous request while typing — it’s expected.
         if (err?.name === 'AbortError') return;
         console.error(err);
       });
     }, 280);
   });
 }
+
 
 
 function renderBrowsePage() {
@@ -9067,92 +9160,10 @@ function renderBrowsePage() {
   setTimeout(() => input?.focus(), 0);
 }
 
-// ---------- Browse Home (preloaded sections) ----------
+// ---------- Browse Home (legacy 3-section renderer removed) ----------
+// Browse Home is now rendered by the toggle-based system:
+// Seasonal / Top Rated / Recently Viewed (see renderBrowseHome + renderBrowseHomeFromData below).
 
-function renderBrowseHomeSkeleton() {
-  const shell = document.getElementById('browseResultsShell');
-  if (!shell) return;
-
-  const skel = () => `
-    <div class="browse-results-grid">
-      ${Array.from({ length: 8 }).map(() => `
-        <div class="browse-card" style="opacity:.55; pointer-events:none;">
-          <div class="browse-cover"><i class="fas fa-spinner fa-spin"></i></div>
-          <div class="browse-info">
-            <div class="browse-title">Loading…</div>
-            <div class="browse-divider"></div>
-            <div class="browse-meta">Fetching from MAL</div>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-
-  shell.innerHTML = `
-    <div class="home-section">
-      <div class="home-section-head">
-        <h2 class="home-section-title">This Season (NEW)</h2>
-      </div>
-      <div class="home-section-line"></div>
-      ${skel()}
-    </div>
-
-    <div class="home-section">
-      <div class="home-section-head">
-        <h2 class="home-section-title">Top Airing (ALL TIME)</h2>
-      </div>
-      <div class="home-section-line"></div>
-      ${skel()}
-    </div>
-
-    <div class="home-section">
-      <div class="home-section-head">
-        <h2 class="home-section-title">Upcoming (Next Season)</h2>
-      </div>
-      <div class="home-section-line"></div>
-      ${skel()}
-    </div>
-  `;
-}
-
-
-function renderBrowseHomeFromData({ thisSeasonNew = [], topAiringAllTime = [], nextSeasonUpcoming = [] } = {}) {
-  const shell = document.getElementById('browseResultsShell');
-  if (!shell) return;
-
-  // dedupe per section
-  thisSeasonNew      = dedupeByMalId(thisSeasonNew);
-  topAiringAllTime   = dedupeByMalId(topAiringAllTime);
-  nextSeasonUpcoming = dedupeByMalId(nextSeasonUpcoming);
-
-  // store ALL shown metadata into the local per-user DB
-  upsertBrowseMetaItems(thisSeasonNew,      'home:thisseason_new');
-  upsertBrowseMetaItems(topAiringAllTime,   'home:topairing_alltime');
-  upsertBrowseMetaItems(nextSeasonUpcoming, 'home:nextseason_upcoming');
-
-  const section = (title, items) => `
-    <div class="home-section">
-      <div class="home-section-head">
-        <h2 class="home-section-title">${escapeHtml(title)}</h2>
-      </div>
-      <div class="home-section-line"></div>
-      ${items && items.length
-        ? `<div class="browse-results-grid">${(items || []).map(renderBrowseCardHTML).join('')}</div>`
-        : `
-          <div class="empty-state">
-            <i class="fas fa-circle-xmark"></i>
-            <h2>No results</h2>
-            <p>Couldn’t load this section right now.</p>
-          </div>
-        `}
-    </div>
-  `;
-
-  shell.innerHTML =
-    section('This Season (NEW)', thisSeasonNew) +
-    section('Top Airing (ALL TIME)', topAiringAllTime) +
-    section('Upcoming (Next Season)', nextSeasonUpcoming);
-}
 
 
 function renderBrowseCardHTML(it){
@@ -9188,7 +9199,8 @@ function renderBrowseCardHTML(it){
   const genres = Array.isArray(it?.genres) ? it.genres.map(g => (g?.name || '').trim()).filter(Boolean) : [];
   const themes = Array.isArray(it?.themes) ? it.themes.map(t => (t?.name || '').trim()).filter(Boolean) : [];
 
-  const genreLine = genres.length ? genres.slice(0, 4).join(', ') : 'N/A';
+  // ✅ only 3 genres
+  const genreLine = genres.length ? genres.slice(0, 3).join(', ') : 'N/A';
   const themeLine = themes.length ? themes.slice(0, 3).join(', ') : '';
 
   // Season + episodes (+ duration if ever available)
@@ -9196,8 +9208,19 @@ function renderBrowseCardHTML(it){
   const eps = (it?.episodes == null || it?.episodes === '') ? 'N/A' : String(it.episodes);
   const dur = (it?.duration ? String(it.duration).trim() : ''); // may be empty in current payload
 
-  const sub1 = `${formatDisplay} • ${escapeHtml(genreLine)}${themeLine ? ` • ${escapeHtml(themeLine)}` : ''}`;
+  const sub1 =
+    `${formatDisplay} • ` +
+    `<span class="browse-entry-genres" data-mal-id="${escapeHtml(String(malId))}">${escapeHtml(genreLine)}</span>` +
+    (themeLine ? ` • ${escapeHtml(themeLine)}` : '');
   const sub2 = `${premiered} • ${eps} Eps${dur ? ` • ${escapeHtml(dur)}` : ''}`;
+
+  // ✅ hide score UI completely when "N/A"
+  const scoreHTML = (scoreNum != null) ? `
+        <div class="browse-entry-score">
+          <div class="browse-entry-score-num">${escapeHtml(ratingDisplay)}</div>
+          <div class="browse-entry-score-lab">MAL</div>
+        </div>
+  ` : '';
 
   return `
     <div class="browse-entry-card browse-anime-card" data-mal-id="${malId}">
@@ -9212,10 +9235,7 @@ function renderBrowseCardHTML(it){
           <div class="browse-entry-sub">${escapeHtml(sub2)}</div>
         </div>
 
-        <div class="browse-entry-score">
-          <div class="browse-entry-score-num">${escapeHtml(ratingDisplay)}</div>
-          <div class="browse-entry-score-lab">MAL</div>
-        </div>
+        ${scoreHTML}
       </div>
 
       <div class="browse-entry-plus-wrap" aria-hidden="true">
@@ -9226,6 +9246,73 @@ function renderBrowseCardHTML(it){
     </div>
   `;
 }
+
+
+async function __hydrateBrowseGenres(root){
+  const nodes = Array.from(root.querySelectorAll('.browse-entry-genres[data-mal-id]'));
+  if (!nodes.length) return;
+
+  // small concurrency to avoid spikes
+  const Q = nodes.map(n => ({ el: n, id: String(n.getAttribute('data-mal-id') || '').trim() }))
+    .filter(x => x.id);
+
+  const seen = new Set();
+  const work = Q.filter(x => {
+    if (seen.has(x.id)) return false;
+    seen.add(x.id);
+    const t = (x.el.textContent || '').trim();
+    return (!t || t === 'N/A'); // only hydrate missing
+  });
+
+  const CONC = 6;
+  let i = 0;
+
+  async function runOne(job){
+    const { el, id } = job;
+
+    // If meta already has genres, use them immediately
+    const metaGenres = __browseMetaDB?.entries?.[id]?.genres;
+    if (Array.isArray(metaGenres) && metaGenres.length) {
+      const names = metaGenres.map(g => String(g?.name || g || '').trim()).filter(Boolean).slice(0, 3);
+      el.textContent = names.length ? names.join(', ') : 'N/A';
+      return;
+    }
+
+    // Else fetch full payload (cached)
+    let payload = null;
+    try { payload = await getFullPayloadCached(id); } catch { payload = null; }
+
+    const src = payload?.details || payload?.jikan || payload?.data || payload || null;
+    const raw = Array.isArray(src?.genres) ? src.genres : [];
+
+    const names = raw
+      .map(g => String(g?.name || g || '').trim())
+      .filter(Boolean)
+      .slice(0, 3);
+
+    const finalText = names.length ? names.join(', ') : 'N/A';
+    el.textContent = finalText;
+
+    // Save into meta DB so next time it’s instant
+    if (names.length) {
+      const objGenres = names.map(name => ({ name }));
+      if (__browseMetaDB?.entries?.[id]) {
+        __browseMetaDB.entries[id].genres = objGenres;
+        saveBrowseMetaDB(__browseMetaDB);
+      }
+    }
+  }
+
+  async function worker(){
+    while (i < work.length) {
+      const job = work[i++];
+      await runOne(job);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(CONC, work.length) }, worker));
+}
+
 
 // -------------------- Browse Home (Worker-powered, no Jikan) --------------------
 
@@ -9258,6 +9345,7 @@ function entryRowToBrowseItem(row){
     type: row?.type || '',
     episodes: row?.episodes ?? null,
     score: row?.score ?? null,
+    status: row?.status || '',
     season: seasonStr,
 
     // Your browse card expects `images.*`
@@ -9268,9 +9356,14 @@ function entryRowToBrowseItem(row){
         }
       : null,
 
-    // entries table doesn’t store genres/themes in your current schema
-    genres: [],
-    themes: []
+    // ✅ Pull genres/themes from local meta cache (keeps cards looking correct)
+    genres: (Array.isArray(__browseMetaDB?.entries?.[String(malId)]?.genres)
+      ? __browseMetaDB.entries[String(malId)].genres
+      : []),
+
+    themes: (Array.isArray(__browseMetaDB?.entries?.[String(malId)]?.themes)
+      ? __browseMetaDB.entries[String(malId)].themes
+      : [])
   };
 }
 
@@ -9356,6 +9449,11 @@ function __curSeasonKey(){
   return { year: d.getFullYear(), season: __seasonFromMonth(d.getMonth()) };
 }
 
+// ✅ alias for browse code that calls __currentSeasonKey()
+function __currentSeasonKey(){
+  return __curSeasonKey();
+}
+
 function __nextSeasonKey(cur){
   const order = ['winter','spring','summer','fall'];
   const i = order.indexOf(cur.season);
@@ -9368,70 +9466,290 @@ function __seasonLabel(key){
   return `${__capSeason(key.season)} ${key.year}`;
 }
 
-async function renderBrowseHome() {
-  const now = Date.now();
+async function renderBrowseHome(force = false){
+  const shell = document.getElementById('browseResultsShell');
+  if (!shell) return;
 
-  // If fresh cache exists, use it instantly
-  if (__browseHomeCache.fetchedAt && (now - __browseHomeCache.fetchedAt) < BROWSE_HOME_TTL_MS) {
-    renderBrowseHomeFromData(__browseHomeCache);
-    return;
+  const mode = __getBrowseMode();
+
+  // keep the toggle visible when we're on home (no search)
+  const toggle = document.getElementById('browseModeToggle');
+  if (toggle) toggle.style.display = '';
+
+  // Cache check
+  const now = Date.now();
+  const fresh = (now - (__browseHomeCache.fetchedAt || 0)) < BROWSE_HOME_TTL_MS;
+  if (!force && fresh && __browseHomeCache.seasonal?.length && __browseHomeCache.topRated?.length){
+    return renderBrowseHomeFromData({
+      seasonal: __browseHomeCache.seasonal,
+      topRated: __browseHomeCache.topRated
+    }, mode);
   }
 
-  // cancel any previous browse request (search/home share the same abort)
-  try { __browseAbort?.abort(); } catch {}
-  __browseAbort = new AbortController();
-
-  renderBrowseHomeSkeleton();
+  // Skeleton while fetching
+  shell.innerHTML = `
+    <div class="browse-results-grid">
+      ${Array.from({ length: 8 }).map(() => `
+        <div class="browse-entry-card" style="opacity:.55; min-height:170px;"></div>
+      `).join('')}
+    </div>
+  `;
 
   try {
-    // MAL ranking endpoints clamp to 50, so ask for 50 and filter down to 30
-    const [airingPool, upcomingPool] = await Promise.all([
-      jikanFetchTopAiring({ limit: 50, signal: __browseAbort.signal }),
-      jikanFetchUpcoming({ limit: 50, signal: __browseAbort.signal })
-    ]);
+    // ✅ helpers (local, browse-only) — HARDENED (no external deps)
+const __scoreNum = (x) => {
+  const s = (x?.score == null) ? '' : String(x.score).trim();
+  const n = (s !== '' && Number.isFinite(+s) && (+s > 0)) ? +s : null;
+  return n;
+};
 
-    const cur = __curSeasonKey();
-    const nxt = __nextSeasonKey(cur);
-    const curLabel = __seasonLabel(cur);
-    const nxtLabel = __seasonLabel(nxt);
+const __genreNames = (x) => {
+  const gs = Array.isArray(x?.genres) ? x.genres : [];
+  return gs
+    .map(g => String(g?.name || g || '').trim())
+    .filter(Boolean);
+};
 
-    // 1) THIS SEASON (NEW): start_season matches current season/year
-    // (Continuations that began last season will have last season start_season, so they get excluded)
-    const thisSeasonNew = (airingPool || [])
-      .filter(it => String(it?.season || '').trim() === curLabel)
-      .slice(0, BROWSE_HOME_LIMIT);
+const __genreNamesLower = (x) => __genreNames(x).map(s => s.toLowerCase());
 
-    // 2) TOP AIRING (ALL TIME): just top airing ranking (your “ALL TIME” label is UI choice)
-    const topAiringAllTime = (airingPool || []).slice(0, BROWSE_HOME_LIMIT);
+const __ratingLower = (x) => String(x?.rating || '').trim().toLowerCase();
 
-    // 3) UPCOMING (NEXT SEASON): filter upcoming by next season/year if possible
-    let nextSeasonUpcoming = (upcomingPool || [])
-      .filter(it => String(it?.season || '').trim() === nxtLabel)
-      .slice(0, BROWSE_HOME_LIMIT);
+// Kids: either has "Kids" genre OR rating hints (G/PG)
+const __isKids = (x) => {
+  const g = __genreNamesLower(x);
+  if (g.includes('kids')) return true;
+  const r = __ratingLower(x);
+  // MAL-style: "g", "pg" (sometimes), or text
+  if (r === 'g' || r === 'pg') return true;
+  if (r.includes('all ages')) return true;
+  return false;
+};
 
-    // If MAL doesn’t provide season for enough items, fall back to generic upcoming
-    if (nextSeasonUpcoming.length < Math.min(10, BROWSE_HOME_LIMIT)) {
-      nextSeasonUpcoming = (upcomingPool || []).slice(0, BROWSE_HOME_LIMIT);
-    }
+// R18: hentai/erotica genre OR rating hints (R+/Rx)
+const __isR18 = (x) => {
+  const g = __genreNamesLower(x);
+  if (g.includes('hentai') || g.includes('erotica')) return true;
+
+  const r = __ratingLower(x);
+  if (r === 'rx' || r === 'r+') return true;
+  if (r.includes('hentai') || r.includes('r+') || r.includes('rx')) return true;
+  return false;
+};
+
+// Parse "Winter 2026" (case-insensitive)
+const __parseSeasonLabel = (label) => {
+  const m = /^\s*(winter|spring|summer|fall)\s+(\d{4})\s*$/i.exec(String(label || ''));
+  if (!m) return null;
+  return { season: m[1].toLowerCase(), year: +m[2] };
+};
+
+// Compute current season label in the SAME format your cards use ("Winter 2026")
+const __currentSeasonLabel = () => {
+  // Hardcode month→season mapping (stable)
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = d.getMonth(); // 0-11
+  const s =
+    (m <= 2) ? 'winter' :
+    (m <= 5) ? 'spring' :
+    (m <= 8) ? 'summer' :
+               'fall';
+  return { season: s, year: y };
+};
+
+// Continued = currently airing AND started in a DIFFERENT season label than current
+const __isContinued = (x) => {
+  // If it has no season label, we can't prove it’s continued -> treat as NOT continued
+  const k = __parseSeasonLabel(String(x?.season || ''));
+  if (!k) return false;
+
+  const cur = __currentSeasonLabel();
+  return !(k.year === cur.year && k.season === cur.season);
+};
+
+// Toggle application + ALWAYS score sort (N/A goes bottom)
+const __applyBrowseToggles = (arr, { allowContinued = true } = {}) => {
+  let out = Array.isArray(arr) ? arr.slice() : [];
+
+  // Kids toggle
+  if (!BROWSE_SHOW_KIDS) out = out.filter(x => !__isKids(x));
+
+  // R18 toggle
+  if (!BROWSE_SHOW_R18) out = out.filter(x => !__isR18(x));
+
+  // Continued toggle (only meaningful for Seasonal/airing lists)
+  if (!allowContinued) out = out.filter(x => !__isContinued(x));
+
+  // Always sort: top rated -> lowest rated (N/A last)
+  out.sort((a, b) => {
+    const A = __scoreNum(a);
+    const B = __scoreNum(b);
+    if (A == null && B == null) return 0;
+    if (A == null) return 1;
+    if (B == null) return -1;
+    return B - A;
+  });
+
+  return out;
+};
+
+
+    // Seasonal = currently airing (includes continued etc.)
+    // ✅ IMPORTANT: seasonal is "limitless" — we do NOT slice by BROWSE_LIMIT_SEASONAL anymore.
+    // We just fetch a big pool and show everything after filtering/sorting.
+    const seasonalRows = await fetchEntriesFromWorker({
+      sort: 'score:desc',
+      limit: 5000
+    });
+
+    const seasonalAll = (Array.isArray(seasonalRows) ? seasonalRows : [])
+      .filter(r => __isCurrentlyAiringStatus(r?.status));
+
+   const seasonal = __applyBrowseToggles(seasonalAll, {
+  allowContinued: !!BROWSE_SHOW_CONTINUED
+});
+
+
+    // Top rated (editable from ONE LINE const)
+    const topRatedRows = await fetchEntriesFromWorker({
+      sort: 'score:desc',
+      limit: BROWSE_LIMIT_TOP_RATED
+    });
+
+    const topRated = __applyBrowseToggles(
+      (Array.isArray(topRatedRows) ? topRatedRows : []).slice(0, BROWSE_LIMIT_TOP_RATED)
+    );
+
+    // meta cache for search suggestions etc.
+    upsertBrowseMetaItems(seasonal, { queries: ['seasonal', 'airing'] });
+    upsertBrowseMetaItems(topRated,  { queries: ['top', 'rated'] });
 
     __browseHomeCache = {
       fetchedAt: Date.now(),
-      thisSeasonNew: Array.isArray(thisSeasonNew) ? thisSeasonNew : [],
-      topAiringAllTime: Array.isArray(topAiringAllTime) ? topAiringAllTime : [],
-      nextSeasonUpcoming: Array.isArray(nextSeasonUpcoming) ? nextSeasonUpcoming : []
+      seasonal,
+      topRated
     };
 
-    // If user started a search since we began, don't overwrite it
-    const input = document.getElementById('browseSearchInput');
-    if (input && input.value.trim().length >= 2) return;
-
-    renderBrowseHomeFromData(__browseHomeCache);
-  } catch (err) {
-    if (err?.name === 'AbortError') return;
-    console.error(err);
-    renderBrowseEmpty();
+    renderBrowseHomeFromData({ seasonal, topRated }, mode);
+  } catch (e) {
+    console.warn('renderBrowseHome fetch failed', e);
+    shell.innerHTML = `<div class="browse-empty">Failed to load browse home.</div>`;
   }
 }
+
+function __syncBrowseToggleUI(mode){
+  const toggle = document.getElementById('browseModeToggle');
+  if (!toggle) return;
+
+  const tabs = Array.from(toggle.querySelectorAll('.browse-mode-tab'));
+  tabs.forEach((b) => {
+    const m = String(b.dataset.mode || '');
+    const active = (m === mode);
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+
+  const underline = toggle.querySelector('.browse-mode-underline');
+  if (underline) {
+    const idx = (mode === 'seasonal') ? 0 : (mode === 'topRated') ? 1 : 2;
+    underline.style.transform = `translateX(${idx * 100}%)`;
+  }
+}
+
+async function __buildRecentBrowseItems(){
+  const recent = __readBrowseRecent();
+  const ids = recent.map(x => String(x?.malId || '').trim()).filter(Boolean);
+  const unique = [];
+  const seen = new Set();
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+    if (unique.length >= BROWSE_RECENT_LIMIT) break;
+  }
+
+  // Build cards from DB rows (fast and consistent with your browse design)
+  const out = [];
+  for (const id of unique) {
+    const row = await __fetchEntryRowByMalId(id);
+    const it = entryRowToBrowseItem(row);
+    if (it) out.push(it);
+  }
+  // ✅ Apply same rules: kids/r18 toggles + always sort by score desc (N/A last)
+  const __scoreNum = (x) => {
+    const s = (x?.score == null) ? '' : String(x.score).trim();
+    const n = (s !== '' && Number.isFinite(+s) && (+s > 0)) ? +s : null;
+    return n;
+  };
+
+  const __isKids = (x) => {
+    const names = Array.isArray(x?.genres) ? x.genres.map(g => String(g?.name || g || '').toLowerCase()) : [];
+    return names.includes('kids');
+  };
+
+  const __isR18 = (x) => {
+    const names = Array.isArray(x?.genres) ? x.genres.map(g => String(g?.name || g || '').toLowerCase()) : [];
+    if (names.includes('hentai') || names.includes('erotica')) return true;
+    const r = String(x?.rating || '').toLowerCase();
+    if (r.includes('rx') || r.includes('r+') || r.includes('17')) return true;
+    return false;
+  };
+
+  let filtered = out.slice();
+  if (!BROWSE_SHOW_KIDS) filtered = filtered.filter(x => !__isKids(x));
+  if (!BROWSE_SHOW_R18)  filtered = filtered.filter(x => !__isR18(x));
+
+  filtered.sort((a, b) => {
+    const A = __scoreNum(a);
+    const B = __scoreNum(b);
+    if (A == null && B == null) return 0;
+    if (A == null) return 1;
+    if (B == null) return -1;
+    return B - A;
+  });
+
+  return filtered;
+}
+
+async function renderBrowseHomeFromData(data, mode){
+  const shell = document.getElementById('browseResultsShell');
+  if (!shell) return;
+
+  const m = (mode === 'seasonal' || mode === 'topRated' || mode === 'recent') ? mode : 'seasonal';
+  __syncBrowseToggleUI(m);
+
+  let title = '';
+  let items = [];
+
+  if (m === 'seasonal') {
+    title = 'Seasonal';
+    items = Array.isArray(data?.seasonal) ? data.seasonal : [];
+  } else if (m === 'topRated') {
+    title = 'Top Rated';
+    items = Array.isArray(data?.topRated) ? data.topRated : [];
+  } else {
+    title = 'Recently Viewed';
+    shell.innerHTML = `
+      <div class="browse-results-grid">
+        ${Array.from({ length: 6 }).map(() => `<div class="browse-entry-card" style="opacity:.55; min-height:170px;"></div>`).join('')}
+      </div>
+    `;
+    items = await __buildRecentBrowseItems();
+  }
+
+  // Render one grid (no more multi-sections)
+  shell.innerHTML = `
+  
+
+    <div class="browse-results-grid">
+      ${items.map(renderBrowseCardHTML).join('')}
+    </div>
+  `;
+
+  // ✅ fill genres safely (cached, concurrency-limited)
+  __hydrateBrowseGenres(shell);
+}
+
 
 
 

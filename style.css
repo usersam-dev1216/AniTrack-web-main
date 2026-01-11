@@ -7328,3 +7328,41 @@ body.route-settings .header-shell{
 }
 
 
+/* ===================== BROWSE TOGGLE (Seasonal / Top Rated / Recent) ===================== */
+#browseView .browse-mode-toggle{
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 10px 14px 0;
+  
+  overflow: hidden;
+ 
+  border-bottom: 2px solid rgba(255,255,255,0.10);
+}
+
+#browseView .browse-mode-tab{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(255,255,255,0.82);
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  padding: 14px 12px;
+  cursor: pointer;
+  font-size: medium;
+}
+
+
+
+
+#browseView .browse-mode-underline{
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 33.3333%;
+  background: rgba(255, 185, 215, 0.96);
+  transform: translateX(0%);
+  transition: transform .18s ease;
+}

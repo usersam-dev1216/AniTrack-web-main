@@ -275,8 +275,23 @@
 
       <div class="browse-layout">
 
-        <!-- LEFT: default browse sections / results grid -->
+        <!-- LEFT: browse toggle + results grid -->
         <section class="browse-main" aria-label="Browse content">
+
+          <!-- Browse toggle: Seasonal / Top Rated / Recently Viewed -->
+          <div id="browseModeToggle" class="browse-mode-toggle" role="tablist" aria-label="Browse mode">
+            <button class="browse-mode-tab active" type="button" role="tab" aria-selected="true" data-mode="seasonal">
+              Seasonal
+            </button>
+            <button class="browse-mode-tab" type="button" role="tab" aria-selected="false" data-mode="topRated">
+              Top Rated
+            </button>
+            <button class="browse-mode-tab" type="button" role="tab" aria-selected="false" data-mode="recent">
+              Recently Viewed
+            </button>
+            <div class="browse-mode-underline" aria-hidden="true"></div>
+          </div>
+
           <div id="browseResultsShell" class="browse-results-shell">
             <div class="empty-state">
               <i class="fas fa-search"></i>
